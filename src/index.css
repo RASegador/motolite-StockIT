@@ -1,0 +1,23 @@
+:root {
+  --motolite-red: #c1272d;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+body { margin: 0; background: #f5f5f5; }
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: #1c1c1c; color: #fff; padding: 16px; display: flex; flex-direction: column; }
+.sidebar-logo { width: 64px; height: 64px; border-radius: 50%; align-self: center; margin-bottom: 8px; }
+.sidebar ul { list-style: none; padding: 0; flex: 1; }
+.sidebar li { padding: 10px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.sidebar li.active, .sidebar li:hover { background: var(--motolite-red); }
+.app-main { flex: 1; padding: 24px; overflow-x: auto; }
+.login-screen { max-width: 360px; margin: 80px auto; text-align: center; }
+.login-logo { width: 96px; height: 96px; border-radius: 50%; }
+.low-stock { background: #fff3cd; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
+.dashboard-stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.stat-tile { background: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.stat-tile span { display: block; font-size: 12px; color: #666; }
+.stat-tile strong { font-size: 20px; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
+.modal form { background: #fff; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; min-width: 280px; }
