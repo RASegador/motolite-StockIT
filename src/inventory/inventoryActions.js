@@ -1,5 +1,5 @@
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { getItemUnits, totalBaseUnits } from '../lib/units';
+import { doc, setDoc, deleteDoc, runTransaction } from 'firebase/firestore';
+import { getItemUnits, totalBaseUnits, cascadeDeductUnit, getUnitCounts } from '../lib/units';
 import { computeSellingPrice } from '../lib/pricing';
 import { newId } from '../lib/format';
 
@@ -28,4 +28,63 @@ export async function saveItem(db, draft, { shopId }) {
 
 export async function deleteItem(db, itemId) {
   await deleteDoc(doc(db, 'items', itemId));
+}
+
+export async function recordMovement(db, itemId, type, qty, reason) {
+  const mvId = newId('m');
+  await runTransaction(db, async (transaction) => {
+    const itemRef = doc(db, 'items', itemId);
+    const snap = await transaction.get(itemRef);
+    if (!snap.exists()) throw new Error('Item no longer exists');
+    const item = snap.data();
+
+    const delta = type === 'in' ? qty : -qty;
+    const newQty = Math.max(0, item.quantity + delta);
+    const baseUnitName = item.baseUnitName || 'Piece';
+    const units = getItemUnits(item);
+    const counts = getUnitCounts(item);
+
+    let unitStock;
+    if (type === 'in') {
+      unitStock = { ...counts, [baseUnitName]: (counts[baseUnitName] || 0) + qty };
+    } else {
+      const result = cascadeDeductUnit(counts, units, baseUnitName, qty);
+      unitStock = result.newStock;
+    }
+
+    transaction.set(itemRef, { ...item, quantity: newQty, unitStock });
+    transaction.set(doc(db, 'movements', mvId), {
+      id: mvId, itemId, type, qty, shopId: item.shopId,
+      reason: reason || (type === 'in' ? 'Stock received' : 'Stock issued'),
+      timestamp: Date.now(),
+    });
+  });
+}
+
+export async function createRestock(db, { itemId, quantity, unitName, unitCost, supplierId, notes }) {
+  const qty = Math.max(0, Number(quantity) || 0);
+  if (qty <= 0) throw new Error('Quantity must be greater than zero');
+  const restockId = newId('rs');
+  const now = Date.now();
+
+  await runTransaction(db, async (transaction) => {
+    const itemRef = doc(db, 'items', itemId);
+    const snap = await transaction.get(itemRef);
+    if (!snap.exists()) throw new Error('Item no longer exists');
+    const item = snap.data();
+
+    const units = getItemUnits(item);
+    const unit = units.find((u) => u.name === unitName) || units[0];
+    const counts = getUnitCounts(item);
+    const newStock = { ...counts, [unit.name]: (counts[unit.name] || 0) + qty };
+    const newQuantity = units.reduce((sum, u) => sum + (newStock[u.name] || 0) * u.factor, 0);
+    const cost = Math.max(0, Number(unitCost) || 0) || (item.unitCost ?? 0);
+
+    transaction.set(itemRef, { ...item, quantity: newQuantity, unitStock: newStock });
+    transaction.set(doc(db, 'restocks', restockId), {
+      id: restockId, itemId, itemSku: item.sku, shopId: item.shopId,
+      quantity: qty, unitName: unit.name, unitCost: cost,
+      supplierId: supplierId || null, notes: notes || '', receivedAt: now,
+    });
+  });
 }
