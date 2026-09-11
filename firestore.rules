@@ -13,9 +13,15 @@ service cloud.firestore {
     function myShopId() {
       return isSignedIn() ? myProfile().shopId : null;
     }
-    function isOwner() { return myRole() == 'owner'; }
-    function isManager() { return myRole() == 'manager'; }
-    function isCashier() { return myRole() == 'cashier'; }
+    // `!= false` (not `== true`) so a legacy profile doc with no `active`
+    // field at all is still treated as active, rather than locking every
+    // pre-existing account out the moment this rule ships.
+    function isActive() {
+      return isSignedIn() && myProfile().active != false;
+    }
+    function isOwner() { return myRole() == 'owner' && isActive(); }
+    function isManager() { return myRole() == 'manager' && isActive(); }
+    function isCashier() { return myRole() == 'cashier' && isActive(); }
     function sameShop(shopId) { return isSignedIn() && shopId == myShopId(); }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);

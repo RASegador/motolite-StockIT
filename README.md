@@ -10,9 +10,13 @@
 3. In Firebase Console → Project Settings → General, register a Web App
    and copy its config values into a new `.env` file in this project
    (copy `.env.example` to `.env` and fill in each `VITE_FIREBASE_*` value).
-4. Deploy the security rules: `npx firebase deploy --only firestore:rules`
-   (run `npx firebase login` and `npx firebase use --add` first to link
-   this folder to your Firebase project).
+4. Deploy the security rules and composite indexes: `npx firebase deploy
+   --only firestore` (run `npx firebase login` and `npx firebase use --add`
+   first to link this folder to your Firebase project). This deploys both
+   `firestore.rules` and `firestore.indexes.json` — several report/history
+   screens (Sales, Damage Reports, Movements Log, Transfers) combine a
+   shop-scoped `where` with an `orderBy` and will fail to load for any
+   non-Owner role without those composite indexes.
 5. **Run the full test suite once before going live** (important — see
    below for why): `npx firebase emulators:exec "vitest run" --project
    motolite-ims-test`
@@ -67,6 +71,14 @@
   discount amount. This is not a bug — it's simply not yet built. If you
   need either of these, they're a natural, self-contained follow-up
   feature to request.
+- **A transfer to a shop that already stocks the same SKU under a
+  different item id creates a second entry rather than merging.** Received
+  stock is matched to a destination item by a deterministic id derived
+  from the source item's id, not by SKU — so if that shop already has its
+  own separately-created item for the same battery, the transfer creates a
+  second item doc instead of adding to the existing one. If this happens,
+  reconcile manually (merge the stock into one item and remove the
+  duplicate) after confirming receipt.
 - The production build currently emits one advisory warning from Vite
   about a JavaScript chunk larger than 500kB. The build still succeeds
   and the app works correctly; this is a performance optimization
