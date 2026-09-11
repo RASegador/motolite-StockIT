@@ -4,6 +4,7 @@ import { useItems } from '../inventory/useItems';
 import { getItemUnits } from '../lib/units';
 import { currency } from '../lib/format';
 import { completeSale } from './salesActions';
+import { useBarcodeScanner } from '../barcode/useBarcodeScanner';
 import { db } from '../firebase';
 import Receipt from './Receipt';
 
@@ -37,6 +38,14 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
     });
     setSearch('');
   }
+
+  // A hardware scanner keystroke-burst resolves to a barcode string here;
+  // look it up among the currently-loaded items and reuse the same
+  // add-to-cart flow as clicking a search result.
+  useBarcodeScanner((code) => {
+    const item = items.find((it) => it.barcode && it.barcode === code);
+    if (item) addToCart(item);
+  });
 
   const total = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
 

@@ -19,6 +19,13 @@ export default function App() {
   const { user, profile, role, loading, login, logout, resetPassword } = useAuth();
   const [view, setView] = useState('overview');
   const shops = useShops();
+  // Owner's profile has shopId: null (Owner isn't tied to one shop) — but
+  // POS/Inventory-create/Damage/Transfer-initiate all write a `shopId`
+  // onto the document they create. Passing profile.shopId straight through
+  // for those screens would write shopId: null (orphaned items no shop can
+  // see, sales dashboardStats silently drops, etc). This lets Owner pick
+  // which shop they're acting as before using any of those write screens.
+  const [ownerActiveShopId, setOwnerActiveShopId] = useState(null);
 
   // Guard against stale `view` state carrying over across a logout/re-login
   // cycle in the same tab (this App instance never unmounts across the auth
@@ -50,9 +57,33 @@ export default function App() {
 
   const shopId = profile.shopId;
   const shopName = shops.find((s) => s.id === shopId)?.name || '';
+  // The shopId to use for shop-scoped WRITE screens only (POS, Inventory
+  // create/edit, Damage report, Transfer initiate). Read/list screens that
+  // already branch on role === 'owner' to see every shop keep using
+  // `shopId`/`profile.shopId` unchanged.
+  const writeShopId = role === 'owner' ? ownerActiveShopId : shopId;
 
   function defaultView() {
-    return role === 'owner' ? <OwnerDashboard /> : <ShopReports shopId={shopId} shopName={shopName} />;
+    if (role === 'owner') return <OwnerDashboard />;
+    if (can(role, 'viewReports')) return <ShopReports shopId={shopId} shopName={shopName} />;
+    // Cashier has neither viewReports nor a shop-reports screen of their
+    // own — land them on POS instead of a screen they can't see.
+    return <POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={user.email} />;
+  }
+
+  function OwnerShopPicker() {
+    if (role !== 'owner') return null;
+    return (
+      <div className="owner-active-shop-picker">
+        <label>
+          Active shop:{' '}
+          <select value={ownerActiveShopId || ''} onChange={(e) => setOwnerActiveShopId(e.target.value || null)}>
+            <option value="">Select a shop…</option>
+            {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+      </div>
+    );
   }
 
   // Each case is gated on the exact same permission Sidebar.jsx uses to
@@ -63,26 +94,40 @@ export default function App() {
   // still 'catalog', Sidebar correctly hides that nav item, but without
   // this guard renderView() would still match `case 'catalog'` and render
   // CatalogManager for the Cashier anyway.
+  // Owner must pick an active shop before using a screen that WRITES a
+  // shopId onto a document (POS checkout, Damage report, Transfer
+  // initiate) — otherwise that write would silently use shopId: null.
+  function requireOwnerShop(node) {
+    if (role === 'owner' && !writeShopId) {
+      return (
+        <div className="owner-shop-required">
+          Select an active shop above before using this screen.
+        </div>
+      );
+    }
+    return node;
+  }
+
   function renderView() {
     switch (view) {
       case 'pos':
         return can(role, 'pos')
-          ? <POSView role={role} shopId={shopId} cashierId={user.uid} cashierEmail={user.email} />
+          ? requireOwnerShop(<POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={user.email} />)
           : defaultView();
       case 'inventory':
-        return can(role, 'viewInventory') ? <InventoryList role={role} shopId={shopId} /> : defaultView();
+        return can(role, 'viewInventory') ? <InventoryList role={role} shopId={writeShopId} /> : defaultView();
       case 'catalog':
         return can(role, 'manageCategories') ? <CatalogManager /> : defaultView();
       case 'damage':
         return can(role, 'reportDamage')
-          ? <DamageReportsView role={role} shopId={shopId} userId={user.uid} />
+          ? requireOwnerShop(<DamageReportsView role={role} shopId={writeShopId} userId={user.uid} />)
           : defaultView();
       case 'transfers':
         return can(role, 'initiateTransfer')
-          ? <TransfersView role={role} shopId={shopId} userId={user.uid} />
+          ? requireOwnerShop(<TransfersView role={role} shopId={writeShopId} userId={user.uid} />)
           : defaultView();
       case 'sales':
-        return can(role, 'viewOwnSales')
+        return can(role, 'viewOwnSales') || can(role, 'viewSalesReports')
           ? <SalesHistory role={role} shopId={shopId} userId={user.uid} />
           : defaultView();
       case 'shops':
@@ -98,7 +143,10 @@ export default function App() {
   return (
     <div className="app-shell">
       <Sidebar view={view} setView={setView} role={role} fullName={profile.fullName} onLogout={logout} />
-      <main className="app-main">{renderView()}</main>
+      <main className="app-main">
+        <OwnerShopPicker />
+        {renderView()}
+      </main>
     </div>
   );
 }

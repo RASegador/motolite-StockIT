@@ -10,7 +10,10 @@ import { db } from '../firebase';
 // useSales fetch everything); a Cashier sees only their own — filtered
 // here rather than in useSales, since "my sales" isn't a shop-scoping
 // concern, it's a per-cashier one on top of the shop scope already
-// applied by useSales for non-owner roles.
+// applied by useSales for non-owner roles. Manager sees every sale in
+// their own shop (useSales already scopes to shopId for non-owner roles)
+// with no per-cashier filter and, per the Cancel-button gating below, no
+// ability to cancel — Manager has viewSalesReports but not cancelSales.
 export default function SalesHistory({ role, shopId, userId }) {
   const allSales = useSales({ role, shopId });
   const sales = role === 'cashier' ? allSales.filter((s) => s.cashierId === userId) : allSales;

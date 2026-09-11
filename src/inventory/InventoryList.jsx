@@ -28,7 +28,9 @@ export default function InventoryList({ role, shopId }) {
       <div className="inventory-toolbar">
         <input placeholder="Search SKU, name, model, vehicle type…" value={search} onChange={(e) => setSearch(e.target.value)} />
         {can(role, 'editInventory') && (
-          <button onClick={() => setShowNewForm(true)}><Plus size={16} /> Add item</button>
+          role === 'owner' && !shopId
+            ? <span className="inventory-owner-shop-hint">Select an active shop above to add a new item.</span>
+            : <button onClick={() => setShowNewForm(true)}><Plus size={16} /> Add item</button>
         )}
       </div>
 

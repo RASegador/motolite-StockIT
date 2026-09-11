@@ -45,6 +45,10 @@ export async function initiateTransfer(db, { itemId, fromShopId, toShopId, quant
     transaction.set(doc(db, 'transfers', transferId), {
       id: transferId, itemId, itemSku: item.sku, itemName: item.name,
       fromShopId, toShopId, quantity: qty, status: 'in_transit',
+      // Denormalized from the source item (already read above) so
+      // confirmReceipt can carry real cost/price onto a newly-created
+      // destination item instead of leaving them unset/zero.
+      unitCost: item.unitCost ?? 0, sellingPrice: item.sellingPrice ?? 0,
       initiatedBy, initiatedAt: now, confirmedBy: null, confirmedAt: null, confirmedQuantity: null,
     });
     const outMvId = newId('m');
@@ -98,6 +102,7 @@ export async function confirmReceipt(db, transferId, confirmedQuantity, confirme
         id: destItemId(transfer.toShopId, transfer.itemId), sku: transfer.itemSku, name: transfer.itemName,
         shopId: transfer.toShopId, sourceItemId: transfer.itemId, baseUnitName: 'Piece',
         quantity: qty, unitStock: { Piece: qty }, units: [], reservedForReview: 0,
+        unitCost: transfer.unitCost ?? 0, sellingPrice: transfer.sellingPrice ?? 0,
       });
     }
 
