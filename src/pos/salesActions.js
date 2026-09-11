@@ -20,6 +20,9 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
     const finalStockByItem = {};
     for (const line of cartLines) {
       const item = freshItems[line.itemId];
+      if (!(line.qty > 0)) {
+        throw new Error(`Invalid quantity for ${item.sku || item.name || line.itemId}`);
+      }
       const units = getItemUnits(item);
       const current = finalStockByItem[item.id]?.newStock || getUnitCounts(item);
       const sellUnitName = line.unitName || item.baseUnitName || 'Piece';
@@ -57,8 +60,13 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
       transaction.set(doc(db, 'items', itemId), { ...freshItems[itemId], quantity: newQuantity, unitStock: newStock });
     });
     cartLines.forEach((line) => {
+      const item = freshItems[line.itemId];
+      const units = getItemUnits(item);
+      const unitName = line.unitName || item.baseUnitName || 'Piece';
+      const resolvedUnit = units.find((u) => u.name === unitName);
+      const factor = resolvedUnit ? resolvedUnit.factor : 1;
       const mvId = newId('m');
-      const baseQty = line.qty * (line.factor ?? 1);
+      const baseQty = line.qty * factor;
       transaction.set(doc(db, 'movements', mvId), {
         id: mvId, itemId: line.itemId, type: 'out', qty: baseQty, shopId,
         reason: `Sale ${receiptNo}`, timestamp: now,
@@ -76,6 +84,15 @@ export async function cancelSale(db, sale) {
   const itemIds = [...new Set(sale.items.map((l) => l.itemId))];
 
   await runTransaction(db, async (transaction) => {
+    // Fresh-read the sale document itself inside the transaction, mirroring
+    // the fresh-read discipline used for items below. The caller-supplied
+    // `sale` object may be stale (e.g. two concurrent/duplicate cancelSale
+    // calls for the same sale) — trusting it for the cancelled-guard would
+    // let both calls pass and both restore stock (double-credit).
+    const saleSnap = await transaction.get(doc(db, 'sales', sale.id));
+    if (!saleSnap.exists()) throw new Error('Sale not found');
+    if (saleSnap.data().cancelled) throw new Error('This sale is already cancelled');
+
     const freshItems = {};
     for (const itemId of itemIds) {
       const snap = await transaction.get(doc(db, 'items', itemId));
@@ -97,8 +114,13 @@ export async function cancelSale(db, sale) {
       transaction.set(doc(db, 'items', itemId), { ...freshItems[itemId], quantity: newQuantity, unitStock: newStock });
     });
     sale.items.forEach((line) => {
+      const item = freshItems[line.itemId];
+      const units = item ? getItemUnits(item) : [];
+      const unitName = line.unitName || (item && item.baseUnitName) || 'Piece';
+      const resolvedUnit = units.find((u) => u.name === unitName);
+      const factor = resolvedUnit ? resolvedUnit.factor : (line.factor ?? 1);
       const mvId = newId('m');
-      const baseQty = line.qty * (line.factor ?? 1);
+      const baseQty = line.qty * factor;
       transaction.set(doc(db, 'movements', mvId), {
         id: mvId, itemId: line.itemId, type: 'in', qty: baseQty, shopId: sale.shopId,
         reason: `Sale ${sale.receiptNo} cancelled`, timestamp: now,

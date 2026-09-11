@@ -85,4 +85,43 @@ describe('cancelSale', () => {
     await cancelSale(ownerDb, sale);
     await expect(cancelSale(ownerDb, { ...sale, cancelled: true })).rejects.toThrow(/already cancelled/i);
   });
+
+  it('rejects a second cancelSale call using the ORIGINAL stale sale object (race/double-click), without double-restoring stock', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 3, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+    );
+    // First call succeeds and restores stock.
+    await cancelSale(ownerDb, sale);
+    const afterFirst = (await getDoc(doc(ownerDb, 'items', 'item1'))).data();
+    expect(afterFirst.quantity).toBe(10);
+    expect(afterFirst.unitStock.Piece).toBe(10);
+
+    // Second call reuses the ORIGINAL `sale` object (as returned by
+    // completeSale, before the first cancelSale ever ran) — simulating a
+    // duplicate click or a second admin session that still has the stale,
+    // pre-cancellation object in memory. The caller-side guard on `sale`
+    // would pass (sale.cancelled is still false on this object), so this
+    // only fails if the transaction re-reads the sale doc fresh.
+    expect(sale.cancelled).toBe(false);
+    await expect(cancelSale(ownerDb, sale)).rejects.toThrow(/already cancelled/i);
+
+    // Stock must not have been restored a second time.
+    const afterSecond = (await getDoc(doc(ownerDb, 'items', 'item1'))).data();
+    expect(afterSecond.quantity).toBe(10);
+    expect(afterSecond.unitStock.Piece).toBe(10);
+  });
+});
+
+describe('completeSale validation', () => {
+  it('rejects a cart line with qty <= 0 instead of silently inflating stock', async () => {
+    await expect(completeSale(
+      cashDb,
+      [{ itemId: 'item1', qty: -2, unitName: 'Piece', unitPrice: 1000 }],
+      null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+    )).rejects.toThrow(/invalid quantity/i);
+    const item = (await getDoc(doc(cashDb, 'items', 'item1'))).data();
+    expect(item.quantity).toBe(10);
+  });
 });
