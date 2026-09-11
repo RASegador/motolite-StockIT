@@ -39,7 +39,8 @@ service cloud.firestore {
       allow create: if isOwner() ||
         (isManager() && sameShop(request.resource.data.shopId));
       allow update: if isOwner() ||
-        (isManager() && sameShop(resource.data.shopId)) ||
+        (isManager() && sameShop(resource.data.shopId) &&
+          request.resource.data.shopId == resource.data.shopId) ||
         (isCashier() && sameShop(resource.data.shopId) &&
           onlyChanged(['quantity', 'unitStock', 'reservedForReview']));
       allow delete: if isOwner() || (isManager() && sameShop(resource.data.shopId));
