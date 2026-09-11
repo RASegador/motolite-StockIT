@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function myRole() {
+      return isSignedIn() ? myProfile().role : null;
+    }
+    function myShopId() {
+      return isSignedIn() ? myProfile().shopId : null;
+    }
+    function isOwner() { return myRole() == 'owner'; }
+    function isManager() { return myRole() == 'manager'; }
+    function isCashier() { return myRole() == 'cashier'; }
+    function sameShop(shopId) { return isSignedIn() && shopId == myShopId(); }
+    function onlyChanged(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    match /users/{uid} {
+      allow read: if isSignedIn() && (isOwner() || request.auth.uid == uid);
+      allow create: if isOwner();
+      allow update: if isOwner() ||
+        (request.auth.uid == uid && onlyChanged(['fullName', 'phone']));
+      allow delete: if isOwner();
+    }
+
+    match /shops/{shopId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    match /items/{itemId} {
+      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow create: if isOwner() ||
+        (isManager() && sameShop(request.resource.data.shopId));
+      allow update: if isOwner() ||
+        (isManager() && sameShop(resource.data.shopId)) ||
+        (isCashier() && sameShop(resource.data.shopId) &&
+          onlyChanged(['quantity', 'unitStock', 'reservedForReview']));
+      allow delete: if isOwner() || (isManager() && sameShop(resource.data.shopId));
+    }
+
+    match /movements/{movementId} {
+      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow create: if isOwner() || sameShop(request.resource.data.shopId);
+      allow update, delete: if isOwner();
+    }
+
+    match /sales/{saleId} {
+      // Cancelling a sale is Owner/Admin-only per the spec's permission
+      // table (Shop Manager and Cashier both get "—" for Cancel sales) —
+      // unlike every other per-shop collection, this is NOT opened up to
+      // Manager.
+      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow create: if isOwner() ||
+        (isCashier() && sameShop(request.resource.data.shopId));
+      allow update: if isOwner();
+      allow delete: if isOwner();
+    }
+
+    match /restocks/{restockId} {
+      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow create: if isOwner() || sameShop(request.resource.data.shopId);
+      allow update, delete: if isOwner();
+    }
+
+    match /damageReports/{reportId} {
+      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow create: if isOwner() || sameShop(request.resource.data.shopId);
+      allow update: if isOwner() ||
+        (isManager() && sameShop(resource.data.shopId) &&
+          onlyChanged(['status', 'resolvedBy', 'resolvedAt']));
+      allow delete: if isOwner();
+    }
+
+    match /transfers/{transferId} {
+      // Per the spec, confirming receipt is the DESTINATION shop's job
+      // (or Owner/Admin) — the sending shop's Manager can read it (to see
+      // it's still in transit) but not confirm it themselves.
+      allow read: if isSignedIn() && (isOwner() ||
+        sameShop(resource.data.fromShopId) || sameShop(resource.data.toShopId));
+      allow create: if isOwner() ||
+        (isManager() && sameShop(request.resource.data.fromShopId));
+      allow update: if isOwner() ||
+        (isManager() && sameShop(resource.data.toShopId) &&
+          onlyChanged(['status', 'confirmedBy', 'confirmedAt', 'confirmedQuantity']));
+      allow delete: if isOwner();
+    }
+
+    match /categories/{id} {
+      allow read: if isSignedIn();
+      allow write: if isOwner() || isManager();
+    }
+    match /locations/{id} {
+      allow read: if isSignedIn();
+      allow write: if isOwner() || isManager();
+    }
+    match /suppliers/{id} {
+      allow read: if isSignedIn();
+      allow write: if isOwner() || isManager();
+    }
+  }
+}
