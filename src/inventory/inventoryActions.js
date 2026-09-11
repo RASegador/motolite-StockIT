@@ -3,9 +3,14 @@ import { getItemUnits, totalBaseUnits, cascadeDeductUnit, getUnitCounts } from '
 import { computeSellingPrice } from '../lib/pricing';
 import { newId } from '../lib/format';
 
-export async function saveItem(db, draft, { shopId }) {
+export async function saveItem(db, draft, { shopId: activeShopId }) {
   const id = draft.id || newId('i');
   const baseUnitName = draft.baseUnitName || 'Piece';
+  // Preserve an existing item's own shopId on edit (the loaded item is
+  // spread into the form's draft, so draft.shopId is already correct for
+  // an edit); fall back to the caller-supplied active shop only when
+  // creating a brand-new item (draft.shopId is unset).
+  const shopId = draft.shopId || activeShopId;
 
   const unitStock = { [baseUnitName]: Math.max(0, Number(draft.baseUnitStock) || 0) };
   (draft.units || []).forEach((u) => {
@@ -15,13 +20,17 @@ export async function saveItem(db, draft, { shopId }) {
   const units = getItemUnits({ ...draft, baseUnitName, unitStock });
   const quantity = totalBaseUnits(unitStock, units);
 
-  const sellingPrice = draft.sellingPrice ??
-    computeSellingPrice(draft.unitCost, draft.markupType || 'percent', draft.markupValue || 0);
+  // Always recompute from the current markup inputs rather than preferring
+  // a stored sellingPrice — the form (draft.unitCost/markupType/markupValue)
+  // is the source of truth. A saved item always already has sellingPrice
+  // set, so `draft.sellingPrice ?? computeSellingPrice(...)` used to always
+  // short-circuit to the OLD price and silently ignore markup/cost edits.
+  const sellingPrice = computeSellingPrice(draft.unitCost, draft.markupType || 'percent', draft.markupValue || 0);
 
   await setDoc(doc(db, 'items', id), {
     ...draft, id, shopId, quantity, unitStock, baseUnitName, sellingPrice,
     reservedForReview: draft.reservedForReview ?? 0,
-    units: draft.units || [],
+    units: (draft.units || []).map(({ stock, ...u }) => u),
   });
   return id;
 }
