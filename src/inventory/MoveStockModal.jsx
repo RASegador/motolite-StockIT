@@ -23,15 +23,28 @@ export default function MoveStockModal({ item, onClose }) {
 
   return (
     <Modal title={`${item.sku} — Receive / Issue stock`} onClose={onClose} dirty={dirty}>
-      <form onSubmit={handleSubmit}>
-        <label>
-          <input type="radio" checked={type === 'in'} onChange={() => setType('in')} /> Receive
-        </label>
-        <label>
-          <input type="radio" checked={type === 'out'} onChange={() => setType('out')} /> Issue
-        </label>
-        <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} />
-        <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <form onSubmit={handleSubmit} className="item-form">
+        <div className="item-form-grid">
+          <div className="item-form-field">
+            <span className="item-form-field-label">Movement type</span>
+            <div className="item-form-radio-row">
+              <label className="item-form-radio">
+                <input type="radio" checked={type === 'in'} onChange={() => setType('in')} /> Receive
+              </label>
+              <label className="item-form-radio">
+                <input type="radio" checked={type === 'out'} onChange={() => setType('out')} /> Issue
+              </label>
+            </div>
+          </div>
+          <label className="item-form-field">
+            <span className="item-form-field-label">Quantity</span>
+            <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+          </label>
+          <label className="item-form-field">
+            <span className="item-form-field-label">Reason</span>
+            <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+        </div>
         {error && <p className="modal-error">{error}</p>}
         <div className="form-actions">
           <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>

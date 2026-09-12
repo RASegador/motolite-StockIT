@@ -32,11 +32,13 @@ function ListEditor({ icon, title, rows, onAdd, onRemove, renderLabel }) {
 
       {showAddForm && (
         <Modal title={`Add ${title.slice(0, -1)}`} onClose={() => setShowAddForm(false)} dirty={value.trim() !== ''}>
-          <form onSubmit={handleAdd}>
-            <label className="item-form-field">
-              <span className="item-form-field-label">{title.slice(0, -1)} name</span>
-              <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Add ${title.toLowerCase()}`} autoFocus />
-            </label>
+          <form onSubmit={handleAdd} className="item-form">
+            <div className="item-form-grid">
+              <label className="item-form-field">
+                <span className="item-form-field-label">{title.slice(0, -1)} name</span>
+                <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Add ${title.toLowerCase()}`} autoFocus />
+              </label>
+            </div>
             {error && <p className="modal-error">{error}</p>}
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>

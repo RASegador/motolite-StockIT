@@ -63,7 +63,14 @@ th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
 .modal-card-title { margin: 0; font-size: 16px; font-weight: 700; color: #222; }
 .modal-card-close { flex-shrink: 0; }
 .modal-card-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
-.modal-card-body form { display: flex; flex-direction: column; gap: 12px; }
+/* Layout for a modal's own form is owned by .item-form (below) — every
+   manual-entry form carries that class so spacing stays identical across
+   every pop-up. No generic ".modal-card-body form" rule here: an earlier
+   version had one, and because a descendant selector like that is always
+   more specific than the single ".item-form" class, it silently won the
+   cascade and overrode .item-form's own gap — same bug shape as the
+   ".catalog-section form" one below. One shared class, no specificity
+   fights. */
 .modal-error { color: #c1272d; font-size: 13px; margin: 0; }
 
 .section-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -210,8 +217,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .list-row:last-child { border-bottom: none; }
 .list-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .list-row > span { flex: 1; min-width: 0; }
-.catalog-section form { display: flex; gap: 8px; margin-bottom: 8px; }
-.catalog-section form input { flex: 1; }
+/* The old always-visible inline "add" row here is gone — Categories/
+   Locations/Suppliers now add through the shared Modal like everything
+   else, so there's no bare .catalog-section form left to style. */
 
 /* Product barcode + QR code (Add/Edit Item form, Item detail view) */
 .product-codes { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; margin-top: 8px; }
@@ -228,8 +236,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    small uppercase section labels instead of container lines, per an
    explicit redesign request to remove the boxy look the old
    fieldset-per-section layout had. */
-.item-form { display: flex; flex-direction: column; gap: 16px; max-width: 680px; }
-.item-form-section { display: flex; flex-direction: column; gap: 6px; }
+/* The single layout system every manual-entry form uses (Add Item, Add
+   Shop, Create User, Restock, Move Stock, Add Category/Location/Supplier,
+   Report Damage, Initiate Transfer) — one shared class so spacing can't
+   drift between pop-ups. Every field lives in an .item-form-field (label
+   above control) and every form groups its fields in an .item-form-grid,
+   even a form with only one or two fields, so the same gaps apply
+   everywhere regardless of field count or type. */
+.item-form { display: flex; flex-direction: column; gap: 18px; max-width: 680px; }
+.item-form-section { display: flex; flex-direction: column; gap: 8px; }
 .item-form-section-title {
   margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.05em; color: #999;
@@ -237,18 +252,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* flex, not grid: a lone field wrapping to its own row (e.g. Location
    under SKU/Name/Category) sits at its natural width instead of a grid
    track stretching it across the row and leaving a large empty gap
-   beside it — the "too much space around these boxes" look. */
-.item-form-grid { display: flex; flex-wrap: wrap; gap: 10px 16px; }
-.item-form-field { display: flex; flex-direction: column; gap: 3px; flex: 1 1 170px; min-width: 0; }
+   beside it — the "too much space around these boxes" look. Row gap and
+   column gap are both set explicitly (14px/16px) so fields never touch
+   or overlap in either direction at any width. */
+.item-form-grid { display: flex; flex-wrap: wrap; row-gap: 14px; column-gap: 16px; }
+.item-form-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 170px; min-width: 0; }
 .item-form-field-label { font-size: 12px; font-weight: 600; color: #555; }
 .item-form-field input, .item-form-field select {
-  width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px;
-  font-size: 13px; background: #fff; color: #333;
+  width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px;
+  font-size: 13px; background: #fff; color: #333; box-sizing: border-box;
 }
 .item-form-price-preview { width: 100%; margin: 0; font-size: 13px; color: #444; }
 .item-form-shop-field { flex: 0 1 240px; }
 
-.item-form-unit-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; }
+/* A radio/checkbox group presented as one field — e.g. Move Stock's
+   Receive/Issue choice — keeps the same label-above-control shape as a
+   text field, with its own options spaced apart so they never crowd. */
+.item-form-radio-row { display: flex; flex-wrap: wrap; gap: 6px 20px; min-height: 34px; align-items: center; }
+.item-form-radio { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 400; color: #333; }
+
+.item-form-unit-row { display: flex; flex-wrap: wrap; align-items: flex-end; row-gap: 12px; column-gap: 14px; }
 .item-form-unit-field { flex: 1 1 120px; min-width: 100px; }
 .item-form-unit-remove { flex-shrink: 0; }
 

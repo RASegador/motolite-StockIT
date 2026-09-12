@@ -45,11 +45,13 @@ export default function ShopsView() {
 
       {showAddForm && (
         <Modal title="Add Shop" onClose={() => setShowAddForm(false)} dirty={newName.trim() !== ''}>
-          <form onSubmit={handleCreate} className="shops-create-form">
-            <label className="item-form-field">
-              <span className="item-form-field-label">Shop name</span>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New shop name" autoFocus />
-            </label>
+          <form onSubmit={handleCreate} className="item-form shops-create-form">
+            <div className="item-form-grid">
+              <label className="item-form-field">
+                <span className="item-form-field-label">Shop name</span>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New shop name" autoFocus />
+              </label>
+            </div>
             {error && <p className="modal-error">{error}</p>}
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>

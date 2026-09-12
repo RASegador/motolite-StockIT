@@ -57,25 +57,27 @@ export default function TransfersView({ role, shopId, userId }) {
 
       {showAddForm && can(role, 'initiateTransfer') && (
         <Modal title="Initiate Transfer" onClose={() => setShowAddForm(false)} dirty={formDirty}>
-          <form onSubmit={handleInitiate} className="transfer-initiate-form">
-            <label className="item-form-field">
-              <span className="item-form-field-label">Item</span>
-              <select value={form.itemId} onChange={(e) => setForm({ ...form, itemId: e.target.value })} required autoFocus>
-                <option value="">Item…</option>
-                {items.map((it) => <option key={it.id} value={it.id}>{it.sku} — {it.name}</option>)}
-              </select>
-            </label>
-            <label className="item-form-field">
-              <span className="item-form-field-label">To shop</span>
-              <select value={form.toShopId} onChange={(e) => setForm({ ...form, toShopId: e.target.value })} required>
-                <option value="">To shop…</option>
-                {shops.filter((s) => s.id !== shopId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </label>
-            <label className="item-form-field">
-              <span className="item-form-field-label">Quantity</span>
-              <input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
-            </label>
+          <form onSubmit={handleInitiate} className="item-form transfer-initiate-form">
+            <div className="item-form-grid">
+              <label className="item-form-field">
+                <span className="item-form-field-label">Item</span>
+                <select value={form.itemId} onChange={(e) => setForm({ ...form, itemId: e.target.value })} required autoFocus>
+                  <option value="">Item…</option>
+                  {items.map((it) => <option key={it.id} value={it.id}>{it.sku} — {it.name}</option>)}
+                </select>
+              </label>
+              <label className="item-form-field">
+                <span className="item-form-field-label">To shop</span>
+                <select value={form.toShopId} onChange={(e) => setForm({ ...form, toShopId: e.target.value })} required>
+                  <option value="">To shop…</option>
+                  {shops.filter((s) => s.id !== shopId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </label>
+              <label className="item-form-field">
+                <span className="item-form-field-label">Quantity</span>
+                <input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+              </label>
+            </div>
             {error && <p className="modal-error">{error}</p>}
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>

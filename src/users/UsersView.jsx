@@ -43,32 +43,34 @@ export default function UsersView() {
 
       {showAddForm && (
         <Modal title="Create User" onClose={() => setShowAddForm(false)} dirty={formDirty}>
-          <form onSubmit={handleCreate} className="users-create-form">
-            <label className="item-form-field">
-              <span className="item-form-field-label">Email</span>
-              <input type="email" value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })} required autoFocus />
-            </label>
-            <label className="item-form-field">
-              <span className="item-form-field-label">Full name</span>
-              <input value={form.fullName}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })} required />
-            </label>
-            <label className="item-form-field">
-              <span className="item-form-field-label">Role</span>
-              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </label>
-            {form.role !== 'owner' && (
+          <form onSubmit={handleCreate} className="item-form users-create-form">
+            <div className="item-form-grid">
               <label className="item-form-field">
-                <span className="item-form-field-label">Shop</span>
-                <select value={form.shopId} onChange={(e) => setForm({ ...form, shopId: e.target.value })} required>
-                  <option value="">Assign shop…</option>
-                  {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <span className="item-form-field-label">Email</span>
+                <input type="email" value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })} required autoFocus />
+              </label>
+              <label className="item-form-field">
+                <span className="item-form-field-label">Full name</span>
+                <input value={form.fullName}
+                  onChange={(e) => setForm({ ...form, fullName: e.target.value })} required />
+              </label>
+              <label className="item-form-field">
+                <span className="item-form-field-label">Role</span>
+                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </label>
-            )}
+              {form.role !== 'owner' && (
+                <label className="item-form-field">
+                  <span className="item-form-field-label">Shop</span>
+                  <select value={form.shopId} onChange={(e) => setForm({ ...form, shopId: e.target.value })} required>
+                    <option value="">Assign shop…</option>
+                    {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
             {error && <p className="modal-error">{error}</p>}
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>
