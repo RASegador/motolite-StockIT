@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCategories, useLocations, useSuppliers } from '../catalog/useCatalog';
+import { useShops } from '../shops/useShops';
 import { computeSellingPrice } from '../lib/pricing';
 import { saveItem } from './inventoryActions';
 import { db } from '../firebase';
@@ -43,15 +44,26 @@ function blankDraft() {
   };
 }
 
-export default function ItemForm({ item, shopId, onDone }) {
+export default function ItemForm({ item, shopId, role, onDone }) {
   const categories = useCategories();
   const locations = useLocations();
   const suppliers = useSuppliers();
-  const [draft, setDraft] = useState(item ? draftFromItem(item) : blankDraft());
+  const shops = useShops();
+  // New item, Owner/Admin: the Owner isn't tied to one shop, so they must
+  // explicitly choose which shop this item belongs to — the dropdown below.
+  // Editing an existing item, or a Manager/Cashier creating one, keeps the
+  // shop fixed (their own shop, or the item's existing one) rather than
+  // editable, to avoid overlapping with the dedicated Transfers feature.
+  const isNewItem = !item;
+  const canPickShop = isNewItem && role === 'owner';
+  const [draft, setDraft] = useState(
+    item ? draftFromItem(item) : { ...blankDraft(), shopId: shopId || '' }
+  );
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const previewPrice = computeSellingPrice(draft.unitCost, draft.markupType, draft.markupValue);
+  const selectedShopName = shops.find((s) => s.id === draft.shopId)?.name;
 
   function set(field) {
     return (e) => setDraft({ ...draft, [field]: e.target.value });
@@ -77,9 +89,13 @@ export default function ItemForm({ item, shopId, onDone }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (!draft.shopId) {
+      setError('Please select a shop before saving this item.');
+      return;
+    }
     setSaving(true);
     try {
-      await saveItem(db, draft, { shopId });
+      await saveItem(db, draft, { shopId: draft.shopId });
       onDone?.();
     } catch (err) {
       setError(err.message);
@@ -101,6 +117,27 @@ export default function ItemForm({ item, shopId, onDone }) {
         <option value="">Location…</option>
         {locations.map((l) => <option key={l.id} value={l.name}>{l.name}</option>)}
       </select>
+
+      <fieldset className="item-form-shop">
+        <legend>Shop</legend>
+        {canPickShop ? (
+          <>
+            <select value={draft.shopId || ''} onChange={set('shopId')} required aria-label="Shop">
+              <option value="">Select a shop…</option>
+              {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <p className="item-form-shop-confirm">
+              {draft.shopId
+                ? <>This item will be added to <strong>{selectedShopName || draft.shopId}</strong>.</>
+                : 'Choose which shop this item belongs to before saving.'}
+            </p>
+          </>
+        ) : (
+          <p className="item-form-shop-confirm">
+            {selectedShopName ? <>Shop: <strong>{selectedShopName}</strong></> : 'Shop: —'}
+          </p>
+        )}
+      </fieldset>
 
       <fieldset>
         <legend>Battery details</legend>

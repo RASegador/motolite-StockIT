@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, ArrowUpCircle, PackagePlus, Eye, Battery } from 'lucide-react';
+import Tooltip from '../shared/Tooltip';
 import { useItems } from './useItems';
 import { deleteItem } from './inventoryActions';
 import { reorderThresholdInBase } from '../lib/units';
@@ -75,10 +76,12 @@ export default function InventoryList({ role, shopId }) {
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <div className="inventory-toolbar-spacer" />
+        {/* Owner/Admin no longer needs to pre-select an "active shop" from
+            the sidebar just to open this form — ItemForm itself carries a
+            required Shop dropdown for new items now, so the shop is chosen
+            (and validated) right where the item is created. */}
         {can(role, 'editInventory') && (
-          role === 'owner' && !shopId
-            ? <span className="inventory-owner-shop-hint">Select an active shop above to add a new item.</span>
-            : <button className="btn-primary" onClick={() => setShowNewForm(true)}><Plus size={16} /> Add New Item</button>
+          <button className="btn-primary" onClick={() => setShowNewForm(true)}><Plus size={16} /> Add New Item</button>
         )}
       </div>
 
@@ -110,19 +113,29 @@ export default function InventoryList({ role, shopId }) {
                   <td>
                     <div className="inventory-actions">
                       {can(role, 'viewInventory') && (
-                        <button className="icon-button" onClick={() => setViewingItem(it)} aria-label="View"><Eye size={14} /></button>
+                        <Tooltip label="View item details">
+                          <button className="icon-button" onClick={() => setViewingItem(it)} aria-label="View"><Eye size={14} /></button>
+                        </Tooltip>
                       )}
                       {can(role, 'stockReceive') && (
-                        <button className="icon-button" onClick={() => setMovingItem(it)} aria-label="Move stock"><ArrowUpCircle size={14} /></button>
+                        <Tooltip label="Move stock between units">
+                          <button className="icon-button" onClick={() => setMovingItem(it)} aria-label="Move stock"><ArrowUpCircle size={14} /></button>
+                        </Tooltip>
                       )}
                       {can(role, 'stockReceive') && (
-                        <button className="icon-button" onClick={() => setRestockingItem(it)} aria-label="Restock"><PackagePlus size={14} /></button>
+                        <Tooltip label="Add new stock to this item">
+                          <button className="icon-button" onClick={() => setRestockingItem(it)} aria-label="Restock"><PackagePlus size={14} /></button>
+                        </Tooltip>
                       )}
                       {can(role, 'editInventory') && (
-                        <button className="icon-button" onClick={() => setEditingItem(it)} aria-label="Edit"><Pencil size={14} /></button>
+                        <Tooltip label="Edit item information">
+                          <button className="icon-button" onClick={() => setEditingItem(it)} aria-label="Edit"><Pencil size={14} /></button>
+                        </Tooltip>
                       )}
                       {can(role, 'deleteInventory') && (
-                        <button className="icon-button icon-button-danger" onClick={() => deleteItem(db, it.id)} aria-label="Delete"><Trash2 size={14} /></button>
+                        <Tooltip label="Delete this item">
+                          <button className="icon-button icon-button-danger" onClick={() => deleteItem(db, it.id)} aria-label="Delete"><Trash2 size={14} /></button>
+                        </Tooltip>
                       )}
                     </div>
                   </td>
@@ -136,8 +149,8 @@ export default function InventoryList({ role, shopId }) {
         </table>
       </div>
 
-      {showNewForm && <ItemForm shopId={shopId} onDone={() => setShowNewForm(false)} />}
-      {editingItem && <ItemForm item={editingItem} shopId={shopId} onDone={() => setEditingItem(null)} />}
+      {showNewForm && <ItemForm shopId={shopId} role={role} onDone={() => setShowNewForm(false)} />}
+      {editingItem && <ItemForm item={editingItem} shopId={shopId} role={role} onDone={() => setEditingItem(null)} />}
       {viewingItem && <ItemDetailView item={viewingItem} onClose={() => setViewingItem(null)} />}
       {movingItem && <MoveStockModal item={movingItem} onClose={() => setMovingItem(null)} />}
       {restockingItem && <RestockModal item={restockingItem} onClose={() => setRestockingItem(null)} />}

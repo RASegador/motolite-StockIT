@@ -8,6 +8,7 @@ import { completeSale } from './salesActions';
 import { useBarcodeScanner } from '../barcode/useBarcodeScanner';
 import { db } from '../firebase';
 import Receipt from './Receipt';
+import Tooltip from '../shared/Tooltip';
 
 const PAYMENT_METHODS = ['Cash', 'GCash', 'Card', 'Other'];
 
@@ -100,13 +101,17 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
                   <p className="pos-item-card-stock">{it.quantity} in stock</p>
                 </div>
                 <div className="qty-stepper">
-                  <button type="button" onClick={() => bumpQty(it, -1)} disabled={qty === 0} aria-label={`Remove one ${it.name}`}>
-                    <Minus size={14} />
-                  </button>
+                  <Tooltip label="Decrease quantity">
+                    <button type="button" onClick={() => bumpQty(it, -1)} disabled={qty === 0} aria-label={`Remove one ${it.name}`}>
+                      <Minus size={14} />
+                    </button>
+                  </Tooltip>
                   <span>{qty}</span>
-                  <button type="button" onClick={() => bumpQty(it, 1)} disabled={qty >= it.quantity} aria-label={`Add one ${it.name}`}>
-                    <Plus size={14} />
-                  </button>
+                  <Tooltip label="Increase quantity">
+                    <button type="button" onClick={() => bumpQty(it, 1)} disabled={qty >= it.quantity} aria-label={`Add one ${it.name}`}>
+                      <Plus size={14} />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             );
@@ -128,13 +133,17 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
             <li key={`${line.itemId}-${line.unitName}`}>
               <span className="pos-cart-line-name">{line.sku} — {line.name}</span>
               <div className="qty-stepper">
-                <button type="button" onClick={() => item ? bumpQty(item, -1) : setLineQty({ id: line.itemId }, { name: line.unitName, price: line.unitPrice, factor: line.factor }, line.qty - 1)} aria-label={`Remove one ${line.name}`}>
-                  <Minus size={14} />
-                </button>
+                <Tooltip label="Decrease quantity">
+                  <button type="button" onClick={() => item ? bumpQty(item, -1) : setLineQty({ id: line.itemId }, { name: line.unitName, price: line.unitPrice, factor: line.factor }, line.qty - 1)} aria-label={`Remove one ${line.name}`}>
+                    <Minus size={14} />
+                  </button>
+                </Tooltip>
                 <span>{line.qty}</span>
-                <button type="button" onClick={() => item && bumpQty(item, 1)} disabled={item && line.qty >= item.quantity} aria-label={`Add one ${line.name}`}>
-                  <Plus size={14} />
-                </button>
+                <Tooltip label="Increase quantity">
+                  <button type="button" onClick={() => item && bumpQty(item, 1)} disabled={item && line.qty >= item.quantity} aria-label={`Add one ${line.name}`}>
+                    <Plus size={14} />
+                  </button>
+                </Tooltip>
               </div>
               <span className="pos-cart-line-total">{currency(line.unitPrice * line.qty)}</span>
             </li>

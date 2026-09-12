@@ -7,6 +7,7 @@ import { can } from '../lib/permissions';
 import { currency } from '../lib/format';
 import { db } from '../firebase';
 import ReceiptView from '../pos/Receipt';
+import Tooltip from '../shared/Tooltip';
 
 // Owner/Admin sees every shop's sales (role === 'owner' already makes
 // useSales fetch everything); a Cashier sees only their own — filtered
@@ -49,9 +50,11 @@ export default function SalesHistory({ role, shopId, userId }) {
               <td>{s.cancelled ? 'Cancelled' : 'Completed'}</td>
               <td>
                 <div className="list-row-actions">
-                  <button className="icon-button" aria-label="View receipt" onClick={() => setViewingSale(s)}>
-                    <Eye size={14} />
-                  </button>
+                  <Tooltip label="View this transaction's receipt">
+                    <button className="icon-button" aria-label="View receipt" onClick={() => setViewingSale(s)}>
+                      <Eye size={14} />
+                    </button>
+                  </Tooltip>
                   {!s.cancelled && can(role, 'cancelSales') && (
                     <button className="btn-danger" onClick={() => handleCancel(s)}>Cancel</button>
                   )}

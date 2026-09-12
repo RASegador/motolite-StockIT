@@ -3,6 +3,7 @@ import { Store, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useShops } from './useShops';
 import { createShop, renameShop, deleteShop } from './shopActions';
 import { db } from '../firebase';
+import Tooltip from '../shared/Tooltip';
 
 export default function ShopsView() {
   const shops = useShops();
@@ -54,12 +55,16 @@ export default function ShopsView() {
               <>
                 <span>{shop.name}</span>
                 <div className="list-row-actions">
-                  <button className="icon-button" aria-label="Edit" onClick={() => { setEditingId(shop.id); setEditingName(shop.name); }}>
-                    <Pencil size={14} />
-                  </button>
-                  <button className="icon-button icon-button-danger" aria-label="Delete" onClick={() => deleteShop(db, shop.id)}>
-                    <Trash2 size={14} />
-                  </button>
+                  <Tooltip label="Edit shop name">
+                    <button className="icon-button" aria-label="Edit" onClick={() => { setEditingId(shop.id); setEditingName(shop.name); }}>
+                      <Pencil size={14} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Delete this shop">
+                    <button className="icon-button icon-button-danger" aria-label="Delete" onClick={() => deleteShop(db, shop.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </Tooltip>
                 </div>
               </>
             )}

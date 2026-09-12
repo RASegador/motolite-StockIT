@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import { currency } from '../lib/format';
 import { receiptUrl } from '../lib/receipts';
 import QRCodeImage from '../barcode/QRCodeImage';
+import Tooltip from '../shared/Tooltip';
 
 // Renders both the customer copy and the owner copy — they carry identical
 // data and the same transaction QR code (scanning either one resolves to
@@ -47,9 +48,15 @@ export default function Receipt({ sale, shopName, copyLabel = 'Customer Copy', o
   return (
     <div className="receipt-modal">
       <div className="receipt">
-        <button type="button" className="icon-button receipt-close" onClick={onClose} aria-label="Close">
-          <X size={16} />
-        </button>
+        {/* `receipt-close` (position: absolute) goes on the Tooltip wrapper,
+            not the button — Tooltip's own wrapper is position: relative, so
+            putting it on the button would position the button relative to
+            that wrapper instead of the .receipt panel. */}
+        <Tooltip label="Close this receipt" className="receipt-close">
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+            <X size={16} />
+          </button>
+        </Tooltip>
         <img src="/branding/motolite-logo.png" alt="Motolite" className="receipt-logo" />
         <p className="receipt-shop">{shopName || 'Motolite IMS'}</p>
         <p className="receipt-copy-label">{copyLabel}</p>

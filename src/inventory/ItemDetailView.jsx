@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import Tooltip from '../shared/Tooltip';
 import { useSuppliers } from '../catalog/useCatalog';
 import { getItemUnits, getUnitCounts } from '../lib/units';
 import { currency } from '../lib/format';
@@ -20,9 +21,11 @@ export default function ItemDetailView({ item, onClose }) {
       <div className="item-detail" onClick={(e) => e.stopPropagation()}>
         <div className="item-detail-header">
           <h2>{item.name}</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          <Tooltip label="Close this panel">
+            <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+              <X size={18} />
+            </button>
+          </Tooltip>
         </div>
 
         <div className="item-detail-grid">
