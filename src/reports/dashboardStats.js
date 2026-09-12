@@ -1,4 +1,5 @@
 import { itemInventoryValue, reorderThresholdInBase } from '../lib/units';
+import { netRevenue, netProfit } from '../lib/salesMath';
 
 // Local (not UTC) calendar-day key, so a sale made late at night doesn't get
 // bucketed onto the "wrong" day for a user west of UTC — toISOString() would
@@ -33,7 +34,7 @@ export function groupSalesByDate(sales) {
   (sales || []).forEach((sale) => {
     const key = dateKey(sale.timestamp);
     if (!byDate[key]) byDate[key] = { date: key, revenue: 0, unitsSold: 0 };
-    byDate[key].revenue += sale.total;
+    byDate[key].revenue += netRevenue(sale);
     byDate[key].unitsSold += (sale.items || []).reduce((sum, line) => sum + line.qty, 0);
   });
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
@@ -57,8 +58,8 @@ export function computeShopComparisonStats(items, sales, shops) {
   sales.filter((sale) => !sale.cancelled).forEach((sale) => {
     const bucket = byShop[sale.shopId];
     if (!bucket) return;
-    bucket.revenue += sale.total;
-    bucket.profit += sale.totalProfit || 0;
+    bucket.revenue += netRevenue(sale);
+    bucket.profit += netProfit(sale);
     bucket.unitsSold += sale.items.reduce((sum, line) => sum + line.qty, 0);
   });
 

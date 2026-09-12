@@ -219,6 +219,17 @@ th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
 .pos-cart-lines li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
 .pos-cart-line-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pos-cart-line-total { font-weight: 600; min-width: 64px; text-align: right; }
+
+/* Discount stays collapsed to just its checkbox until switched on — most
+   sales have none, so this keeps the cart from showing empty/irrelevant
+   discount fields by default. */
+.pos-discount { display: flex; flex-direction: column; gap: 6px; margin: 2px 0; }
+.pos-discount-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #444; cursor: pointer; }
+.pos-discount-fields { display: flex; gap: 8px; }
+.pos-discount-fields select { flex: 0 0 90px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+.pos-discount-fields input { flex: 1; min-width: 0; }
+.pos-subtotal { font-size: 13px; color: #666; margin: 4px 0 0; }
+.pos-discount-line { font-size: 13px; color: var(--motolite-red); font-weight: 600; margin: 0; }
 .pos-total { font-size: 18px; font-weight: 700; margin: 8px 0; }
 .pos-cart-card input { padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
 .pos-checkout-btn { width: 100%; height: 44px; font-size: 15px; }
@@ -431,6 +442,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .receipt-unit-price { color: #999; font-size: 11px; }
 .receipt-total { font-size: 16px; font-weight: 700; margin: 8px 0 4px; }
 .receipt-cancelled { color: #c1272d; font-weight: 700; margin: 8px 0; }
+.receipt-refunds { margin: 8px 0; padding-top: 8px; border-top: 1px dashed #eee; text-align: left; }
+.receipt-refunds-title { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #999; text-align: center; }
 .receipt-qr { margin-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .receipt-qr-hint { margin: 0; font-size: 11px; color: #888; }
 .receipt-actions { display: flex; gap: 8px; }

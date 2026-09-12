@@ -32,11 +32,20 @@ export default function Receipt({ sale, shopName, copyLabel = 'Customer Copy', o
       y += 14;
     });
     y += 6;
+    if (sale.discountAmount > 0) {
+      line(`Subtotal: ${currency(sale.subtotal)}`, 9);
+      line(`Discount${sale.discountType === 'percent' ? ` (${sale.discountValue}%)` : ''}: -${currency(sale.discountAmount)}`, 9);
+    }
     line(`Total: ${currency(sale.total)}`, 11);
     line(`Payment: ${sale.paymentMethod || 'Cash'}`, 9);
     if (sale.amountReceived != null) {
       line(`Received: ${currency(sale.amountReceived)}`, 9);
       line(`Change: ${currency(sale.change)}`, 9);
+    }
+    if (sale.refundedAmount > 0) {
+      y += 4;
+      line(`Refunded: -${currency(sale.refundedAmount)}`, 9);
+      line(`Net total: ${currency(sale.total - sale.refundedAmount)}`, 10);
     }
     if (qrRef.current) {
       y += 6;
@@ -73,6 +82,12 @@ export default function Receipt({ sale, shopName, copyLabel = 'Customer Copy', o
             ))}
           </tbody>
         </table>
+        {sale.discountAmount > 0 && (
+          <>
+            <p className="receipt-meta">Subtotal: {currency(sale.subtotal)}</p>
+            <p className="receipt-meta">Discount{sale.discountType === 'percent' ? ` (${sale.discountValue}%)` : ''}: -{currency(sale.discountAmount)}</p>
+          </>
+        )}
         <p className="receipt-total">Total: {currency(sale.total)}</p>
         <p className="receipt-meta">Payment method: {sale.paymentMethod || 'Cash'}</p>
         {sale.amountReceived != null && (
@@ -82,6 +97,20 @@ export default function Receipt({ sale, shopName, copyLabel = 'Customer Copy', o
           </>
         )}
         {sale.cancelled && <p className="receipt-cancelled">VOIDED — this transaction was cancelled</p>}
+        {!sale.cancelled && sale.refundedAmount > 0 && (
+          <div className="receipt-refunds">
+            <p className="receipt-refunds-title">Refunds</p>
+            {(sale.refunds || []).map((r) => (
+              <div key={r.id}>
+                {r.items.map((ri) => (
+                  <p key={ri.lineId} className="receipt-meta">{ri.sku} × {ri.qty} {ri.unitName} — -{currency(ri.amount)}</p>
+                ))}
+              </div>
+            ))}
+            <p className="receipt-meta">Refunded: -{currency(sale.refundedAmount)}</p>
+            <p className="receipt-total">Net total: {currency(sale.total - sale.refundedAmount)}</p>
+          </div>
+        )}
 
         {qrValue && (
           <div className="receipt-qr">

@@ -20,6 +20,13 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
   const [cart, setCart] = useState([]); // [{ itemId, sku, name, qty, unitName, unitPrice, factor }]
   const [amountReceived, setAmountReceived] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
+  // Discount is entirely optional — off by default on every sale. Toggling
+  // it on reveals the type/value inputs; toggling it off (or leaving the
+  // value blank) means completeSale() gets no discount at all, same as
+  // before this feature existed.
+  const [discountEnabled, setDiscountEnabled] = useState(false);
+  const [discountType, setDiscountType] = useState('percent');
+  const [discountValue, setDiscountValue] = useState('');
   const [error, setError] = useState('');
   const [completedSale, setCompletedSale] = useState(null);
 
@@ -63,18 +70,31 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
     if (item) addToCart(item);
   });
 
-  const total = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  const subtotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  // Mirrors completeSale()'s own clamping (0-100 for a percent, capped at
+  // the subtotal for a fixed amount) purely so the cart preview matches
+  // what checkout will actually charge — completeSale() is still the real
+  // source of truth and re-derives this itself from the same inputs.
+  const discountAmount = !discountEnabled || !discountValue
+    ? 0
+    : discountType === 'percent'
+      ? subtotal * (Math.min(100, Math.max(0, Number(discountValue) || 0)) / 100)
+      : Math.min(subtotal, Math.max(0, Number(discountValue) || 0));
+  const total = subtotal - discountAmount;
 
   async function handleCheckout() {
     setError('');
     try {
+      const discount = discountEnabled && discountValue ? { type: discountType, value: Number(discountValue) } : null;
       const sale = await completeSale(db, cart, amountReceived || null, {
-        shopId, cashierId, cashierEmail, shopName, paymentMethod,
+        shopId, cashierId, cashierEmail, shopName, paymentMethod, discount,
       });
       setCompletedSale(sale);
       setCart([]);
       setAmountReceived('');
       setPaymentMethod('Cash');
+      setDiscountEnabled(false);
+      setDiscountValue('');
     } catch (err) {
       setError(err.message);
     }
@@ -151,6 +171,30 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
           })}
           {cart.length === 0 && <li className="pos-empty">Cart is empty.</li>}
         </ul>
+        <div className="pos-discount">
+          <label className="pos-discount-toggle">
+            <input type="checkbox" checked={discountEnabled}
+              onChange={(e) => { setDiscountEnabled(e.target.checked); if (!e.target.checked) setDiscountValue(''); }} />
+            Apply discount (optional)
+          </label>
+          {discountEnabled && (
+            <div className="pos-discount-fields">
+              <select value={discountType} onChange={(e) => setDiscountType(e.target.value)}>
+                <option value="percent">% off</option>
+                <option value="fixed">₱ off</option>
+              </select>
+              <input type="number" min="0" max={discountType === 'percent' ? 100 : undefined}
+                placeholder={discountType === 'percent' ? '0–100' : 'Amount'}
+                value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} />
+            </div>
+          )}
+        </div>
+        {discountAmount > 0 ? (
+          <>
+            <p className="pos-subtotal">Subtotal: {currency(subtotal)}</p>
+            <p className="pos-discount-line">Discount: -{currency(discountAmount)}</p>
+          </>
+        ) : null}
         <p className="pos-total">Total: {currency(total)}</p>
         <label className="pos-payment-method">
           Payment method

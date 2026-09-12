@@ -36,6 +36,16 @@ describe('computeShopComparisonStats', () => {
     expect(totals.unitsSold).toBe(6); // 3 + 2 + 1
     expect(totals.outOfStockCount).toBe(1);
   });
+
+  it('nets out a partial refund from revenue and profit', () => {
+    const withRefund = [
+      { shopId: 'shopA', total: 1000, totalProfit: 200, refundedAmount: 300, refundedProfit: 60, cancelled: false, items: [{ qty: 3 }] },
+    ];
+    const { perShop } = computeShopComparisonStats(items, withRefund, shops);
+    const shopA = perShop.find((s) => s.shopId === 'shopA');
+    expect(shopA.revenue).toBe(700);
+    expect(shopA.profit).toBe(140);
+  });
 });
 
 describe('filterSalesForChart', () => {
@@ -87,5 +97,12 @@ describe('groupSalesByDate', () => {
 
   it('returns an empty array for no sales', () => {
     expect(groupSalesByDate([])).toEqual([]);
+  });
+
+  it('nets out refunded amounts per day', () => {
+    const result = groupSalesByDate([
+      { total: 1000, refundedAmount: 400, timestamp: new Date('2026-07-01T09:00:00').getTime(), items: [{ qty: 2 }] },
+    ]);
+    expect(result).toEqual([{ date: '2026-07-01', revenue: 600, unitsSold: 2 }]);
   });
 });

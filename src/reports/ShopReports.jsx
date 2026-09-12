@@ -3,14 +3,16 @@ import { useSales } from './useSales';
 import { exportSalesReportPdf, exportInventoryReportPdf } from './pdfExport';
 import { currency } from '../lib/format';
 import { itemInventoryValue } from '../lib/units';
+import { netRevenue, netProfit } from '../lib/salesMath';
 
 export default function ShopReports({ shopId, shopName }) {
   const items = useItems({ role: 'manager', shopId });
   const sales = useSales({ role: 'manager', shopId });
   const activeSales = sales.filter((s) => !s.cancelled);
 
-  const revenue = activeSales.reduce((s, sale) => s + sale.total, 0);
-  const profit = activeSales.reduce((s, sale) => s + (sale.totalProfit || 0), 0);
+  // Net of any partial refunds — see src/lib/salesMath.js.
+  const revenue = activeSales.reduce((s, sale) => s + netRevenue(sale), 0);
+  const profit = activeSales.reduce((s, sale) => s + netProfit(sale), 0);
   const inventoryValue = items.reduce((s, it) => s + itemInventoryValue(it), 0);
 
   return (

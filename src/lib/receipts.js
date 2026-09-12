@@ -43,6 +43,8 @@ export function buildPublicReceipt(sale, shopName) {
       unitName: line.unitName || '', unitPrice: line.unitPrice || 0, lineTotal: line.lineTotal || 0,
     })),
     subtotal: sale.subtotal,
+    discountType: sale.discountType || null,
+    discountAmount: sale.discountAmount || 0,
     total: sale.total,
     paymentMethod: sale.paymentMethod || 'Cash',
     amountReceived: sale.amountReceived ?? null,

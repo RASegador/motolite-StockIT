@@ -4,7 +4,32 @@ import { newId } from '../lib/format';
 import { generateSecureToken } from '../lib/secureToken';
 import { buildPublicReceipt } from '../lib/receipts';
 
-export async function completeSale(db, cartLines, amountReceived, { shopId, cashierId, cashierEmail, shopName, paymentMethod }) {
+// Rounds to the nearest cent — a percent discount on an odd subtotal
+// (e.g. 20% of 33.33) would otherwise leave a floating-point tail
+// (33.330000000000005) on the sale document and receipt.
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+// `discount` is entirely optional — `null`/`undefined`, or an object with
+// no usable `value`, both mean "no discount" and behave exactly as before
+// this feature existed. When present: { type: 'percent' | 'fixed', value }.
+// A percent is clamped to 0-100; a fixed amount is clamped to the
+// pre-discount subtotal, so a discount can never make total go negative.
+function computeDiscount(subtotal, discount) {
+  const type = discount && (discount.type === 'percent' || discount.type === 'fixed') ? discount.type : null;
+  if (!type) return { type: null, value: 0, amount: 0 };
+  const rawValue = Number(discount.value);
+  if (!(rawValue > 0)) return { type: null, value: 0, amount: 0 };
+  if (type === 'percent') {
+    const pct = Math.min(100, Math.max(0, rawValue));
+    return { type, value: pct, amount: round2(subtotal * (pct / 100)) };
+  }
+  const fixed = Math.min(subtotal, Math.max(0, rawValue));
+  return { type, value: fixed, amount: round2(fixed) };
+}
+
+export async function completeSale(db, cartLines, amountReceived, { shopId, cashierId, cashierEmail, shopName, paymentMethod, discount }) {
   if (!cartLines || cartLines.length === 0) throw new Error('Cart is empty');
 
   const receiptNo = 'R' + Date.now().toString(36).toUpperCase();
@@ -56,22 +81,36 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
         // transaction.set() fails), so sku/name are defaulted rather than
         // passed through raw — a fixture/legacy item missing one of these
         // must not be able to take down the entire sale write.
+        // `lineId` gives refundSaleItems() a stable handle on this exact
+        // line (distinct from itemId, in case the same item is sold twice
+        // in one sale in different units) to track partial refunds against.
+        lineId: newId('sl'),
         itemId: item.id, sku: item.sku || '', name: item.name || '',
         qty: line.qty, unitName: line.unitName || item.baseUnitName || 'Piece', factor: line.factor ?? 1,
         unitPrice: price, unitCost: lineCost,
         lineTotal: price * line.qty, lineProfit: (price - lineCost) * line.qty,
       };
     });
-    const total = saleLines.reduce((s, l) => s + l.lineTotal, 0);
+    const subtotal = saleLines.reduce((s, l) => s + l.lineTotal, 0);
     const totalCost = saleLines.reduce((s, l) => s + l.unitCost * l.qty, 0);
-    const totalProfit = saleLines.reduce((s, l) => s + l.lineProfit, 0);
+    const grossProfit = saleLines.reduce((s, l) => s + l.lineProfit, 0);
+    const { type: discountType, value: discountValue, amount: discountAmount } = computeDiscount(subtotal, discount);
+    const total = subtotal - discountAmount;
+    // The discount comes straight out of margin (cost doesn't change), so
+    // the sale's profit is reduced by the same amount rather than
+    // recomputed per line.
+    const totalProfit = grossProfit - discountAmount;
     const received = amountReceived != null && amountReceived !== '' ? Number(amountReceived) : null;
     const change = received != null ? Math.max(0, received - total) : null;
 
     const sale = {
       id: newId('s'), receiptNo, timestamp: now, items: saleLines,
-      subtotal: total, total, totalCost, totalProfit, amountReceived: received, change,
+      subtotal, discountType, discountValue, discountAmount,
+      total, totalCost, totalProfit, amountReceived: received, change,
       cashierId, cashierEmail: cashierEmail || '', shopId, cancelled: false,
+      // Populated later by refundSaleItems() for a partial return — kept
+      // here at creation so every sale doc has the same shape from day one.
+      refunds: [], refundedAmount: 0, refundedProfit: 0,
       paymentMethod: paymentMethod || 'Cash', receiptToken,
     };
 
@@ -158,5 +197,120 @@ export async function cancelSale(db, sale) {
     if (receiptToken) {
       transaction.set(doc(db, 'receiptsPublic', receiptToken), { cancelled: true }, { merge: true });
     }
+  });
+}
+
+// A partial return — one or more individual line items (and quantities)
+// from an otherwise-completed sale, as opposed to cancelSale() voiding the
+// whole transaction. Unlike cancelSale, the sale's own `total`/
+// `totalProfit` are never rewritten; instead this appends a record to
+// `sale.refunds` and bumps `refundedAmount`/`refundedProfit`, so the
+// document stays an honest log of "what was sold, then what came back"
+// rather than silently editing history. Reporting code nets these out via
+// src/lib/salesMath.js.
+//
+// `refundLines` is [{ lineId, qty }, ...] — `lineId` matches a
+// sale.items[].lineId (sales completed before this feature existed have no
+// lineId; refunding those isn't supported, same as this app never
+// supported partial refunds before now).
+export async function refundSaleItems(db, sale, refundLines, { refundedBy, reason } = {}) {
+  if (!refundLines || refundLines.length === 0) {
+    throw new Error('Select at least one item to refund.');
+  }
+  const now = Date.now();
+
+  return runTransaction(db, async (transaction) => {
+    const saleSnap = await transaction.get(doc(db, 'sales', sale.id));
+    if (!saleSnap.exists()) throw new Error('Sale not found');
+    const saleData = saleSnap.data();
+    if (saleData.cancelled) throw new Error('This sale was cancelled — nothing to refund.');
+
+    // How much of each line has already come back on a PRIOR refund, so a
+    // second (or third) partial refund on the same sale can't ever exceed
+    // what was actually sold on that line.
+    const alreadyRefunded = {};
+    (saleData.refunds || []).forEach((r) => {
+      (r.items || []).forEach((ri) => {
+        alreadyRefunded[ri.lineId] = (alreadyRefunded[ri.lineId] || 0) + ri.qty;
+      });
+    });
+
+    const saleItems = saleData.items || [];
+    const itemIds = [...new Set(refundLines
+      .map((rl) => saleItems.find((l) => l.lineId === rl.lineId)?.itemId)
+      .filter(Boolean))];
+
+    const freshItems = {};
+    for (const itemId of itemIds) {
+      const snap = await transaction.get(doc(db, 'items', itemId));
+      if (snap.exists()) freshItems[itemId] = snap.data();
+    }
+
+    const refundItemRecords = [];
+    let refundAmount = 0;
+    let refundProfit = 0;
+    const stockDelta = {}; // itemId -> { unitName: qty }
+
+    refundLines.forEach((rl) => {
+      const line = saleItems.find((l) => l.lineId === rl.lineId);
+      if (!line) throw new Error('That line is not part of this sale (or predates refund support).');
+      const already = alreadyRefunded[rl.lineId] || 0;
+      const remaining = line.qty - already;
+      const qty = Number(rl.qty) || 0;
+      if (qty <= 0) throw new Error(`Invalid refund quantity for ${line.sku || line.name}`);
+      if (qty > remaining) {
+        throw new Error(`Cannot refund more than the remaining ${remaining} ${line.unitName} of ${line.sku || line.name}`);
+      }
+
+      const amount = line.unitPrice * qty;
+      const profit = (line.unitPrice - (line.unitCost || 0)) * qty;
+      refundAmount += amount;
+      refundProfit += profit;
+      refundItemRecords.push({
+        lineId: rl.lineId, itemId: line.itemId, sku: line.sku || '', name: line.name || '',
+        unitName: line.unitName, qty, unitPrice: line.unitPrice, amount,
+      });
+
+      stockDelta[line.itemId] = stockDelta[line.itemId] || {};
+      stockDelta[line.itemId][line.unitName] = (stockDelta[line.itemId][line.unitName] || 0) + qty;
+    });
+
+    // Restock each affected item — same "cascade back into unitStock"
+    // shape cancelSale uses, just for the specific line quantities being
+    // returned rather than the whole sale.
+    Object.entries(stockDelta).forEach(([itemId, deltas]) => {
+      const item = freshItems[itemId];
+      if (!item) return; // item was deleted since — refund is still recorded, stock just can't be restored
+      const units = getItemUnits(item);
+      let newStock = getUnitCounts(item);
+      Object.entries(deltas).forEach(([unitName, qty]) => {
+        newStock = { ...newStock, [unitName]: (newStock[unitName] || 0) + qty };
+      });
+      const newQuantity = totalBaseUnits(newStock, units);
+      transaction.set(doc(db, 'items', itemId), { ...item, quantity: newQuantity, unitStock: newStock });
+    });
+
+    // One movement entry per affected item (not per refunded line) keeps
+    // the Movements log readable when a multi-line refund touches several
+    // units of the same item.
+    Object.entries(stockDelta).forEach(([itemId, deltas]) => {
+      const totalQty = Object.values(deltas).reduce((s, q) => s + q, 0);
+      const mvId = newId('m');
+      transaction.set(doc(db, 'movements', mvId), {
+        id: mvId, itemId, type: 'in', qty: totalQty, shopId: saleData.shopId,
+        reason: `Refund ${saleData.receiptNo}`, timestamp: now,
+      });
+    });
+
+    const refundRecord = {
+      id: newId('rf'), items: refundItemRecords, amount: refundAmount, profitReduction: refundProfit,
+      refundedBy: refundedBy || '', reason: reason || '', refundedAt: now,
+    };
+    const refunds = [...(saleData.refunds || []), refundRecord];
+    const refundedAmount = (saleData.refundedAmount || 0) + refundAmount;
+    const refundedProfit = (saleData.refundedProfit || 0) + refundProfit;
+    transaction.set(doc(db, 'sales', sale.id), { refunds, refundedAmount, refundedProfit }, { merge: true });
+
+    return refundRecord;
   });
 }

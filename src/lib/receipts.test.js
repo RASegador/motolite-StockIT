@@ -38,13 +38,20 @@ describe('buildPublicReceipt', () => {
     expect(pub).toEqual({
       saleId: 's1', receiptNo: 'R123', timestamp: 1700000000000, shopName: 'Main Branch',
       items: [{ sku: 'MTL-N50', name: 'Battery N50', qty: 2, unitName: 'Piece', unitPrice: 1500, lineTotal: 3000 }],
-      subtotal: 3000, total: 3000, paymentMethod: 'Cash',
+      subtotal: 3000, discountType: null, discountAmount: 0, total: 3000, paymentMethod: 'Cash',
       amountReceived: 3000, change: 0, cancelled: false,
     });
     expect(pub.cashierId).toBeUndefined();
     expect(pub.cashierEmail).toBeUndefined();
     expect(pub.items[0].unitCost).toBeUndefined();
     expect(pub.items[0].lineProfit).toBeUndefined();
+  });
+
+  it('carries the discount type/amount through when present', () => {
+    const pub = buildPublicReceipt({ ...sale, discountType: 'percent', discountAmount: 300, total: 2700 }, 'Main Branch');
+    expect(pub.discountType).toBe('percent');
+    expect(pub.discountAmount).toBe(300);
+    expect(pub.total).toBe(2700);
   });
 
   it('defaults paymentMethod to Cash when absent', () => {

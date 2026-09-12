@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Receipt, Eye } from 'lucide-react';
+import { Receipt, Eye, RotateCcw } from 'lucide-react';
 import { useSales } from './useSales';
 import { useShops } from '../shops/useShops';
 import { cancelSale } from '../pos/salesActions';
@@ -7,6 +7,7 @@ import { can } from '../lib/permissions';
 import { currency } from '../lib/format';
 import { db } from '../firebase';
 import ReceiptView from '../pos/Receipt';
+import RefundModal from '../pos/RefundModal';
 import Tooltip from '../shared/Tooltip';
 
 // Owner/Admin sees every shop's sales (role === 'owner' already makes
@@ -23,6 +24,7 @@ export default function SalesHistory({ role, shopId, userId }) {
   const sales = role === 'cashier' ? allSales.filter((s) => s.cashierId === userId) : allSales;
   const [error, setError] = useState('');
   const [viewingSale, setViewingSale] = useState(null);
+  const [refundingSale, setRefundingSale] = useState(null);
 
   async function handleCancel(sale) {
     setError('');
@@ -47,7 +49,7 @@ export default function SalesHistory({ role, shopId, userId }) {
               <td>{s.receiptNo}</td>
               <td>{new Date(s.timestamp).toLocaleString()}</td>
               <td>{currency(s.total)}</td>
-              <td>{s.cancelled ? 'Cancelled' : 'Completed'}</td>
+              <td>{s.cancelled ? 'Cancelled' : s.refundedAmount > 0 ? `Refunded ${currency(s.refundedAmount)}` : 'Completed'}</td>
               <td>
                 <div className="list-row-actions">
                   <Tooltip label="View this transaction's receipt">
@@ -56,7 +58,14 @@ export default function SalesHistory({ role, shopId, userId }) {
                     </button>
                   </Tooltip>
                   {!s.cancelled && can(role, 'cancelSales') && (
-                    <button className="btn-danger" onClick={() => handleCancel(s)}>Cancel</button>
+                    <>
+                      <Tooltip label="Refund item(s) from this sale">
+                        <button className="icon-button" aria-label="Refund" onClick={() => setRefundingSale(s)}>
+                          <RotateCcw size={14} />
+                        </button>
+                      </Tooltip>
+                      <button className="btn-danger" onClick={() => handleCancel(s)}>Cancel</button>
+                    </>
                   )}
                 </div>
               </td>
@@ -71,6 +80,14 @@ export default function SalesHistory({ role, shopId, userId }) {
           shopName={shops.find((sh) => sh.id === viewingSale.shopId)?.name || ''}
           copyLabel={role === 'cashier' ? 'Customer Copy' : 'Owner Copy'}
           onClose={() => setViewingSale(null)}
+        />
+      )}
+      {refundingSale && (
+        <RefundModal
+          sale={refundingSale}
+          userId={userId}
+          onClose={() => setRefundingSale(null)}
+          onDone={() => setRefundingSale(null)}
         />
       )}
     </div>

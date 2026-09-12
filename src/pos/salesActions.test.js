@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
-import { completeSale, cancelSale } from './salesActions';
+import { completeSale, cancelSale, refundSaleItems } from './salesActions';
 
 let testEnv, cashDb, ownerDb;
 
@@ -110,6 +110,91 @@ describe('cancelSale', () => {
     const afterSecond = (await getDoc(doc(ownerDb, 'items', 'item1'))).data();
     expect(afterSecond.quantity).toBe(10);
     expect(afterSecond.unitStock.Piece).toBe(10);
+  });
+});
+
+describe('completeSale discount', () => {
+  it('applies no discount when none is given (unchanged behavior)', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+    );
+    expect(sale.subtotal).toBe(2000);
+    expect(sale.discountType).toBeNull();
+    expect(sale.discountAmount).toBe(0);
+    expect(sale.total).toBe(2000);
+  });
+
+  it('applies a percent discount, clamped to 0-100, and reduces profit by the same amount', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com', discount: { type: 'percent', value: 10 } }
+    );
+    expect(sale.subtotal).toBe(2000);
+    expect(sale.discountType).toBe('percent');
+    expect(sale.discountAmount).toBe(200);
+    expect(sale.total).toBe(1800);
+    // Gross profit at full price is (1000-800)*2 = 400; the 200 discount comes out of that.
+    expect(sale.totalProfit).toBe(200);
+  });
+
+  it('applies a fixed discount, capped at the subtotal (never a negative total)', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com', discount: { type: 'fixed', value: 5000 } }
+    );
+    expect(sale.subtotal).toBe(1000);
+    expect(sale.discountAmount).toBe(1000); // capped, not 5000
+    expect(sale.total).toBe(0);
+  });
+
+  it('ignores a discount with no usable value', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com', discount: { type: 'percent', value: 0 } }
+    );
+    expect(sale.discountType).toBeNull();
+    expect(sale.total).toBe(1000);
+  });
+});
+
+describe('refundSaleItems', () => {
+  it('restores stock, records the refund, and reduces net revenue via refundedAmount', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 4, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+    );
+    const lineId = sale.items[0].lineId;
+    await refundSaleItems(ownerDb, sale, [{ lineId, qty: 1 }], { refundedBy: 'owner1' });
+
+    const item = (await getDoc(doc(ownerDb, 'items', 'item1'))).data();
+    expect(item.quantity).toBe(7); // 10 - 4 sold + 1 refunded
+
+    const saleDoc = (await getDoc(doc(ownerDb, 'sales', sale.id))).data();
+    expect(saleDoc.refundedAmount).toBe(1000);
+    expect(saleDoc.refunds).toHaveLength(1);
+    expect(saleDoc.refunds[0].items[0]).toMatchObject({ lineId, qty: 1, amount: 1000 });
+  });
+
+  it('refuses to refund more than what remains unrefunded on a line', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+    );
+    const lineId = sale.items[0].lineId;
+    await refundSaleItems(ownerDb, sale, [{ lineId, qty: 2 }], { refundedBy: 'owner1' });
+    await expect(refundSaleItems(ownerDb, sale, [{ lineId, qty: 1 }], { refundedBy: 'owner1' }))
+      .rejects.toThrow(/cannot refund more than the remaining 0/i);
+  });
+
+  it('refuses to refund a cancelled sale', async () => {
+    const sale = await completeSale(
+      cashDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+    );
+    await cancelSale(ownerDb, sale);
+    await expect(refundSaleItems(ownerDb, sale, [{ lineId: sale.items[0].lineId, qty: 1 }], { refundedBy: 'owner1' }))
+      .rejects.toThrow(/cancelled/i);
   });
 });
 
