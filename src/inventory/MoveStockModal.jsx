@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { recordMovement } from './inventoryActions';
 import { db } from '../firebase';
+import Modal from '../shared/Modal';
 
 export default function MoveStockModal({ item, onClose }) {
   const [type, setType] = useState('in');
   const [qty, setQty] = useState(1);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
+  const dirty = type !== 'in' || qty != 1 || reason !== '';
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -20,9 +22,8 @@ export default function MoveStockModal({ item, onClose }) {
   }
 
   return (
-    <div className="modal">
+    <Modal title={`${item.sku} — Receive / Issue stock`} onClose={onClose} dirty={dirty}>
       <form onSubmit={handleSubmit}>
-        <h3>{item.sku} — Receive / Issue stock</h3>
         <label>
           <input type="radio" checked={type === 'in'} onChange={() => setType('in')} /> Receive
         </label>
@@ -37,6 +38,6 @@ export default function MoveStockModal({ item, onClose }) {
           <button type="submit" className="btn-primary">Confirm</button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

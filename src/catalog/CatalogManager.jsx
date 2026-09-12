@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Tag, MapPin, Truck } from 'lucide-react';
+import { Tag, MapPin, Truck, Plus } from 'lucide-react';
 import { useCategories, useLocations, useSuppliers } from './useCatalog';
 import { addCategory, deleteCategory, addLocation, deleteLocation, addSupplier, deleteSupplier } from './catalogActions';
 import { db } from '../firebase';
+import Modal from '../shared/Modal';
 
 function ListEditor({ icon, title, rows, onAdd, onRemove, renderLabel }) {
+  const [showAddForm, setShowAddForm] = useState(false);
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
 
@@ -14,6 +16,7 @@ function ListEditor({ icon, title, rows, onAdd, onRemove, renderLabel }) {
     try {
       await onAdd(value);
       setValue('');
+      setShowAddForm(false);
     } catch (err) {
       setError(err.message);
     }
@@ -21,12 +24,28 @@ function ListEditor({ icon, title, rows, onAdd, onRemove, renderLabel }) {
 
   return (
     <div className="catalog-section">
-      <h3>{icon} {title}</h3>
-      <form onSubmit={handleAdd}>
-        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Add ${title.toLowerCase()}`} />
-        <button type="submit" className="btn-primary">Add</button>
-      </form>
-      {error && <p className="catalog-error">{error}</p>}
+      <div className="section-header-row">
+        <h3>{icon} {title}</h3>
+        <button type="button" className="btn-primary" onClick={() => setShowAddForm(true)}><Plus size={16} /> Add</button>
+      </div>
+      {error && !showAddForm && <p className="catalog-error">{error}</p>}
+
+      {showAddForm && (
+        <Modal title={`Add ${title.slice(0, -1)}`} onClose={() => setShowAddForm(false)} dirty={value.trim() !== ''}>
+          <form onSubmit={handleAdd}>
+            <label className="item-form-field">
+              <span className="item-form-field-label">{title.slice(0, -1)} name</span>
+              <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Add ${title.toLowerCase()}`} autoFocus />
+            </label>
+            {error && <p className="modal-error">{error}</p>}
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>
+              <button type="submit" className="btn-primary">Add</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       <ul>
         {rows.map((row) => (
           <li key={row.id} className="list-row">

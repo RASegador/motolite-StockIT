@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useCategories, useLocations, useSuppliers } from '../catalog/useCatalog';
 import { useShops } from '../shops/useShops';
 import { computeSellingPrice } from '../lib/pricing';
@@ -7,6 +7,7 @@ import { db } from '../firebase';
 import { newId } from '../lib/format';
 import { generateBarcode } from '../lib/barcode';
 import ProductCodes from '../barcode/ProductCodes';
+import Modal from '../shared/Modal';
 
 const VEHICLE_TYPE_SUGGESTIONS = ['Motorcycle', 'Car', 'SUV', 'Truck', 'Van'];
 
@@ -84,6 +85,10 @@ export default function ItemForm({ item, shopId, role, onDone }) {
   const [draft, setDraft] = useState(
     item ? draftFromItem(item) : { ...blankDraft(), shopId: shopId || '' }
   );
+  // Captured once, at mount, so the "unsaved changes" check (used to guard
+  // an accidental backdrop-click/Escape close) has a stable baseline to
+  // diff the live draft against.
+  const initialDraftRef = useRef(draft);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -129,7 +134,10 @@ export default function ItemForm({ item, shopId, role, onDone }) {
     }
   }
 
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraftRef.current);
+
   return (
+    <Modal title={isNewItem ? 'Add Inventory Item' : 'Edit Item'} onClose={() => onDone?.()} dirty={dirty} className="modal-card-wide">
     <form onSubmit={handleSubmit} className="item-form">
       <Section title="Item">
         <Field label="SKU">
@@ -263,5 +271,6 @@ export default function ItemForm({ item, shopId, role, onDone }) {
         <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save item'}</button>
       </div>
     </form>
+    </Modal>
   );
 }

@@ -3,6 +3,7 @@ import { useSuppliers } from '../catalog/useCatalog';
 import { getItemUnits } from '../lib/units';
 import { createRestock } from './inventoryActions';
 import { db } from '../firebase';
+import Modal from '../shared/Modal';
 
 export default function RestockModal({ item, onClose }) {
   const suppliers = useSuppliers();
@@ -13,6 +14,7 @@ export default function RestockModal({ item, onClose }) {
   const [supplierId, setSupplierId] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const dirty = quantity != 1 || unitCost != (item.unitCost || 0) || supplierId !== '' || notes !== '';
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -28,9 +30,8 @@ export default function RestockModal({ item, onClose }) {
   }
 
   return (
-    <div className="modal">
+    <Modal title={`${item.sku} — Restock`} onClose={onClose} dirty={dirty}>
       <form onSubmit={handleSubmit}>
-        <h3>{item.sku} — Restock</h3>
         <select value={unitName} onChange={(e) => setUnitName(e.target.value)}>
           {units.map((u) => <option key={u.name} value={u.name}>{u.name}</option>)}
         </select>
@@ -47,6 +48,6 @@ export default function RestockModal({ item, onClose }) {
           <button type="submit" className="btn-primary">Confirm restock</button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

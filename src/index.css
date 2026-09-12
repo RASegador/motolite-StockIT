@@ -49,8 +49,25 @@ th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
 }
 .dashboard-chart-filters .btn-link { align-self: flex-end; height: 38px; }
 .dashboard-chart-empty { text-align: center; color: #888; padding: 16px; }
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
-.modal form { background: #fff; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; min-width: 280px; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 30; }
+
+/* Shared pop-up card (src/shared/Modal.jsx) used by every manual
+   data-entry form in the app. Minimal by design — no rule/border between
+   header and body, elevation comes from the shadow alone. */
+.modal-card {
+  background: #fff; border-radius: 10px; width: min(480px, 94vw); max-height: 88vh;
+  overflow-y: auto; box-shadow: 0 12px 36px rgba(0,0,0,0.22); display: flex; flex-direction: column;
+}
+.modal-card-wide { width: min(720px, 94vw); }
+.modal-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 18px 0; }
+.modal-card-title { margin: 0; font-size: 16px; font-weight: 700; color: #222; }
+.modal-card-close { flex-shrink: 0; }
+.modal-card-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+.modal-card-body form { display: flex; flex-direction: column; gap: 12px; }
+.modal-error { color: #c1272d; font-size: 13px; margin: 0; }
+
+.section-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.section-header-row h2, .section-header-row h3 { margin: 0; }
 
 .pos-view { display: flex; gap: 20px; align-items: flex-start; }
 .pos-main { flex: 1; min-width: 0; }
@@ -211,30 +228,34 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    small uppercase section labels instead of container lines, per an
    explicit redesign request to remove the boxy look the old
    fieldset-per-section layout had. */
-.item-form { display: flex; flex-direction: column; gap: 22px; max-width: 680px; }
-.item-form-section { display: flex; flex-direction: column; gap: 10px; }
+.item-form { display: flex; flex-direction: column; gap: 16px; max-width: 680px; }
+.item-form-section { display: flex; flex-direction: column; gap: 6px; }
 .item-form-section-title {
   margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.05em; color: #999;
 }
-.item-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 16px; }
-.item-form-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* flex, not grid: a lone field wrapping to its own row (e.g. Location
+   under SKU/Name/Category) sits at its natural width instead of a grid
+   track stretching it across the row and leaving a large empty gap
+   beside it — the "too much space around these boxes" look. */
+.item-form-grid { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.item-form-field { display: flex; flex-direction: column; gap: 3px; flex: 1 1 170px; min-width: 0; }
 .item-form-field-label { font-size: 12px; font-weight: 600; color: #555; }
 .item-form-field input, .item-form-field select {
-  width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px;
+  width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px;
   font-size: 13px; background: #fff; color: #333;
 }
-.item-form-price-preview { grid-column: 1 / -1; margin: 0; font-size: 13px; color: #444; }
-.item-form-shop-field select { min-width: 220px; }
+.item-form-price-preview { width: 100%; margin: 0; font-size: 13px; color: #444; }
+.item-form-shop-field { flex: 0 1 240px; }
 
-.item-form-unit-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+.item-form-unit-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; }
 .item-form-unit-field { flex: 1 1 120px; min-width: 100px; }
 .item-form-unit-remove { flex-shrink: 0; }
 
 .item-form-error { color: #c1272d; font-size: 13px; margin: 0; }
 
 @media (max-width: 560px) {
-  .item-form-grid { grid-template-columns: 1fr; }
+  .item-form-field { flex-basis: 100%; }
   .item-form-unit-row { flex-direction: column; align-items: stretch; }
 }
 
