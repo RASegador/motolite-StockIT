@@ -27,6 +27,16 @@ service cloud.firestore {
     function isOwner() { return myRole() == 'owner' && isActive(); }
     function isManager() { return myRole() == 'manager' && isActive(); }
     function isCashier() { return myRole() == 'cashier' && isActive(); }
+    // Warehouse staff (src/lib/permissions.js's `warehouse` role) — assigned
+    // to one location (a `shops` doc, `type: 'warehouse'` or `'store'`; the
+    // rules layer doesn't care which, only that it's THEIR assigned
+    // location) exactly like a Manager is assigned to their shop.
+    function isWarehouse() { return myRole() == 'warehouse' && isActive(); }
+    // Manager-or-Warehouse: the two roles that operate day-to-day stock
+    // movements (transfers, damage reports, restocks) for their own single
+    // assigned location, as opposed to Owner (every location) or Cashier
+    // (POS-only, no location-management actions).
+    function isLocationStaff() { return isManager() || isWarehouse(); }
     function sameShop(shopId) { return isSignedIn() && shopId == myShopId(); }
     // Safe field read off a `resource` for use in read/list rules. Two
     // distinct emulator/rules-language gotchas made the plain
@@ -91,13 +101,13 @@ service cloud.firestore {
     match /items/{itemId} {
       allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() ||
-        (isManager() && sameShop(request.resource.data.shopId));
+        (isLocationStaff() && sameShop(request.resource.data.shopId));
       allow update: if isOwner() ||
-        (isManager() && sameShopAsDoc(resource, 'shopId') &&
+        (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
           request.resource.data.shopId == resource.data.shopId) ||
         (isCashier() && sameShopAsDoc(resource, 'shopId') &&
           onlyChanged(['quantity', 'unitStock', 'reservedForReview']));
-      allow delete: if isOwner() || (isManager() && sameShopAsDoc(resource, 'shopId'));
+      allow delete: if isOwner() || (isLocationStaff() && sameShopAsDoc(resource, 'shopId'));
     }
 
     match /movements/{movementId} {
@@ -128,22 +138,56 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() || sameShop(request.resource.data.shopId);
       allow update: if isOwner() ||
-        (isManager() && sameShopAsDoc(resource, 'shopId') &&
+        (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
           onlyChanged(['status', 'resolvedBy', 'resolvedAt']));
       allow delete: if isOwner();
     }
 
     match /transfers/{transferId} {
-      // Per the spec, confirming receipt is the DESTINATION shop's job
-      // (or Owner/Admin) — the sending shop's Manager can read it (to see
-      // it's still in transit) but not confirm it themselves.
+      // Per the spec, confirming receipt is the DESTINATION location's job
+      // (or Owner/Admin) — the sending location's staff can read it (to see
+      // it's still in transit) but not confirm it themselves. Any
+      // location-to-location direction is allowed (Warehouse<->Store,
+      // Warehouse<->Warehouse, Store<->Store) — the rule only cares that
+      // the caller's own assigned location is the source (create) or
+      // destination (confirm), never which `type` either location is.
       allow read: if isSignedIn() && (isOwner() ||
         sameShopAsDoc(resource, 'fromShopId') || sameShopAsDoc(resource, 'toShopId'));
       allow create: if isOwner() ||
-        (isManager() && sameShop(request.resource.data.fromShopId));
+        (isLocationStaff() && sameShop(request.resource.data.fromShopId));
       allow update: if isOwner() ||
-        (isManager() && sameShopAsDoc(resource, 'toShopId') &&
+        (isLocationStaff() && sameShopAsDoc(resource, 'toShopId') &&
           onlyChanged(['status', 'confirmedBy', 'confirmedAt', 'confirmedQuantity']));
+      allow delete: if isOwner();
+    }
+
+    match /restockRequests/{requestId} {
+      // A store's Manager (or Warehouse staff, requesting from another
+      // location) can read/create their own location's requests; Owner and
+      // Warehouse staff can additionally read every request, since
+      // reviewing (approve/reject/fulfill) is their job per the spec.
+      allow read: if isSignedIn() && (isOwner() || isWarehouse() ||
+        sameShopAsDoc(resource, 'requestingShopId'));
+      allow create: if isOwner() ||
+        (isLocationStaff() && sameShop(request.resource.data.requestingShopId));
+      allow update: if isOwner() ||
+        // Approve/reject a pending request — Owner/Warehouse-only.
+        (isWarehouse() && onlyChanged(['status', 'reviewedBy', 'reviewedAt', 'transferId', 'fulfilledAt'])) ||
+        // The requesting location's own Manager may cancel their own
+        // still-pending request, and nothing else.
+        (isManager() && sameShopAsDoc(resource, 'requestingShopId') &&
+          onlyChanged(['status']) && resource.data.get('status', 'pending') == 'pending' &&
+          request.resource.data.status == 'cancelled') ||
+        // Closing the loop: whoever confirms the linked Transfer In (the
+        // requesting location's own staff — Manager for a store, Warehouse
+        // for a warehouse-to-warehouse request) may flip an already-
+        // approved request straight to 'fulfilled'. See confirmReceipt()
+        // in src/transfers/transferActions.js, which makes exactly this
+        // write right after the matching transfer is confirmed received.
+        (isLocationStaff() && sameShopAsDoc(resource, 'requestingShopId') &&
+          onlyChanged(['status', 'fulfilledAt']) &&
+          resource.data.get('status', 'pending') == 'approved' &&
+          request.resource.data.status == 'fulfilled');
       allow delete: if isOwner();
     }
 

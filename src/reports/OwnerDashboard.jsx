@@ -5,6 +5,8 @@ import { useSales } from './useSales';
 import { useMovementsLog } from './useMovementsLog';
 import { useDamageReports } from '../damage/useDamageReports';
 import { useTransfers } from '../transfers/useTransfers';
+import { useRestockRequests } from '../restock/useRestockRequests';
+import { computeRestockAlerts } from '../restock/restockAlerts';
 import { useShops } from '../shops/useShops';
 import { useUsers } from '../users/useUsers';
 import { computeShopComparisonStats, filterSalesForChart, groupSalesByDate } from './dashboardStats';
@@ -18,6 +20,7 @@ export default function OwnerDashboard() {
   const movements = useMovementsLog({ role: 'owner' });
   const damageReports = useDamageReports({ role: 'owner' });
   const transfers = useTransfers({ role: 'owner' });
+  const restockRequests = useRestockRequests({ role: 'owner' });
   const shops = useShops();
   const users = useUsers();
 
@@ -26,10 +29,12 @@ export default function OwnerDashboard() {
   const pendingDamageCount = damageReports.filter((r) => r.status === 'pending').length;
   const inTransitTransferCount = transfers.filter((t) => t.status === 'in_transit').length;
   const returnedCount = damageReports.filter((r) => r.reason === 'returned').length;
+  const pendingRestockCount = restockRequests.filter((r) => r.status === 'pending').length;
+  const lowStockAlerts = useMemo(() => computeRestockAlerts(items, shops), [items, shops]);
 
   const activity = useMemo(
-    () => buildActivityFeed({ movements, damageReports, transfers }).slice(0, 20),
-    [movements, damageReports, transfers]
+    () => buildActivityFeed({ movements, damageReports, transfers, restockRequests }).slice(0, 20),
+    [movements, damageReports, transfers, restockRequests]
   );
   const userById = useMemo(() => new Map(users.map((u) => [u.uid, u])), [users]);
   const shopById = useMemo(() => new Map(shops.map((s) => [s.id, s])), [shops]);
@@ -69,6 +74,8 @@ export default function OwnerDashboard() {
         <div className="stat-tile"><span>Pending damage reports</span><strong>{pendingDamageCount}</strong></div>
         <div className="stat-tile"><span>Returned items (all-time)</span><strong>{returnedCount}</strong></div>
         <div className="stat-tile"><span>Transfers in transit</span><strong>{inTransitTransferCount}</strong></div>
+        <div className="stat-tile"><span>Pending restock requests</span><strong>{pendingRestockCount}</strong></div>
+        <div className="stat-tile"><span>Low-stock alerts</span><strong>{lowStockAlerts.length}</strong></div>
       </div>
 
       <h3>Sales</h3>
@@ -128,13 +135,40 @@ export default function OwnerDashboard() {
         <button onClick={() => exportInventoryReportPdf(items, { title: 'All Shops — Inventory Report' })}>Export inventory PDF</button>
       </div>
 
+      <h3>Low-stock alerts</h3>
+      <p className="dashboard-activity-hint">
+        Computed live from each item's own reorder point — create a Restock Request for any of these from
+        the Restock section (top navigation).
+      </p>
+      <table className="dashboard-shop-table">
+        <thead>
+          <tr><th>Shop/Warehouse</th><th>Item</th><th>SKU</th><th>Current stock</th><th>Min stock</th><th>Suggested restock</th></tr>
+        </thead>
+        <tbody>
+          {lowStockAlerts.slice(0, 15).map((a) => (
+            <tr key={a.itemId}>
+              <td>{a.shopName} <span className={`shop-type-badge shop-type-${a.shopType}`}>{a.shopType === 'warehouse' ? 'Warehouse' : 'Store'}</span></td>
+              <td>{a.name}</td><td>{a.sku}</td><td>{a.currentStock}</td><td>{a.minStock}</td><td>{a.suggestedQty}</td>
+            </tr>
+          ))}
+          {lowStockAlerts.length === 0 && (
+            <tr><td colSpan={6} className="inventory-empty">No items are at or below their reorder point.</td></tr>
+          )}
+        </tbody>
+      </table>
+
       <h3>Users</h3>
       <table>
         <thead><tr><th>Name</th><th>Role</th><th>Shop</th></tr></thead>
         <tbody>
           {users.map((u) => {
             const shop = shops.find((s) => s.id === u.shopId);
-            return <tr key={u.uid}><td>{u.fullName}</td><td>{u.role}</td><td>{shop?.name || '—'}</td></tr>;
+            return (
+              <tr key={u.uid}>
+                <td>{u.fullName}</td><td>{u.role}</td>
+                <td>{shop ? <>{shop.name} <span className={`shop-type-badge shop-type-${shop.type === 'warehouse' ? 'warehouse' : 'store'}`}>{shop.type === 'warehouse' ? 'Warehouse' : 'Store'}</span></> : '—'}</td>
+              </tr>
+            );
           })}
         </tbody>
       </table>

@@ -3,6 +3,7 @@ import { ClipboardList } from 'lucide-react';
 import { useMovementsLog } from './useMovementsLog';
 import { useDamageReports } from '../damage/useDamageReports';
 import { useTransfers } from '../transfers/useTransfers';
+import { useRestockRequests } from '../restock/useRestockRequests';
 import { useItems } from '../inventory/useItems';
 import { useShops } from '../shops/useShops';
 import { useUsers } from '../users/useUsers';
@@ -23,6 +24,7 @@ export default function OwnerActivityLog() {
   const movements = useMovementsLog({ role: 'owner' }, 500);
   const damageReports = useDamageReports({ role: 'owner' });
   const transfers = useTransfers({ role: 'owner' });
+  const restockRequests = useRestockRequests({ role: 'owner' });
   const items = useItems({ role: 'owner' });
   const shops = useShops();
   const users = useUsers();
@@ -36,8 +38,8 @@ export default function OwnerActivityLog() {
   const [endDate, setEndDate] = useState('');
 
   const feed = useMemo(
-    () => buildActivityFeed({ movements, damageReports, transfers }),
-    [movements, damageReports, transfers]
+    () => buildActivityFeed({ movements, damageReports, transfers, restockRequests }),
+    [movements, damageReports, transfers, restockRequests]
   );
 
   const userById = useMemo(() => new Map(users.map((u) => [u.uid, u])), [users]);
@@ -80,8 +82,8 @@ export default function OwnerActivityLog() {
         <label>
           Shop
           <select value={shopId} onChange={(e) => setShopId(e.target.value)}>
-            <option value="all">All shops</option>
-            {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="all">All locations</option>
+            {shops.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.type === 'warehouse' ? 'Warehouse' : 'Store'})</option>)}
           </select>
         </label>
         <label>
@@ -98,6 +100,7 @@ export default function OwnerActivityLog() {
             <option value="owner">Owner</option>
             <option value="manager">Manager</option>
             <option value="cashier">Cashier</option>
+            <option value="warehouse">Warehouse</option>
           </select>
         </label>
         <label>

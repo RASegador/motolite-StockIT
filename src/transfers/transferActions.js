@@ -1,4 +1,4 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { doc, setDoc, runTransaction } from 'firebase/firestore';
 import { cascadeDeductUnit, getItemUnits, getUnitCounts, totalBaseUnits } from '../lib/units';
 import { newId } from '../lib/format';
 
@@ -23,7 +23,7 @@ function destItemId(toShopId, sourceItemId) {
   return `xfer_${toShopId}_${sourceItemId}`;
 }
 
-export async function initiateTransfer(db, { itemId, fromShopId, toShopId, quantity, initiatedBy }) {
+export async function initiateTransfer(db, { itemId, fromShopId, toShopId, quantity, initiatedBy, linkedRequestId }) {
   const qty = Math.max(0, Number(quantity) || 0);
   if (qty <= 0) throw new Error('Quantity must be greater than zero');
   const transferId = newId('xf');
@@ -50,6 +50,14 @@ export async function initiateTransfer(db, { itemId, fromShopId, toShopId, quant
       // destination item instead of leaving them unset/zero.
       unitCost: item.unitCost ?? 0, sellingPrice: item.sellingPrice ?? 0,
       initiatedBy, initiatedAt: now, confirmedBy: null, confirmedAt: null, confirmedQuantity: null,
+      // Set only when this transfer exists to fulfill an approved Restock
+      // Request (see src/restock/restockRequestActions.js) — lets
+      // confirmReceipt() below auto-mark that request 'fulfilled' once the
+      // destination location confirms delivery, closing the loop the spec
+      // calls "linked to the corresponding Transfer Out -> Transfer In
+      // workflow" without the two features needing to know much else
+      // about each other.
+      linkedRequestId: linkedRequestId || null,
     });
     const outMvId = newId('m');
     transaction.set(doc(db, 'movements', outMvId), {
@@ -63,6 +71,12 @@ export async function initiateTransfer(db, { itemId, fromShopId, toShopId, quant
 export async function confirmReceipt(db, transferId, confirmedQuantity, confirmedBy) {
   const qty = Math.max(0, Number(confirmedQuantity) || 0);
   const now = Date.now();
+  // Set inside the transaction (from the fresh-read transfer doc) so the
+  // follow-up write below — closing out a linked Restock Request, if any —
+  // can happen after the transaction commits, using data that's guaranteed
+  // consistent with what was actually written.
+  let resolvedLinkedRequestId = null;
+  let resolvedStatus = null;
 
   await runTransaction(db, async (transaction) => {
     // Public API takes only a transferId (never a caller-supplied transfer
@@ -78,13 +92,16 @@ export async function confirmReceipt(db, transferId, confirmedQuantity, confirme
     if (!transferSnap.exists()) throw new Error('Transfer no longer exists');
     const transfer = transferSnap.data();
     if (transfer.status !== 'in_transit') throw new Error('This transfer has already been resolved');
+    resolvedLinkedRequestId = transfer.linkedRequestId || null;
 
     if (qty !== transfer.quantity) {
+      resolvedStatus = 'disputed';
       transaction.set(transferRef, {
         ...transfer, status: 'disputed', confirmedBy, confirmedAt: now, confirmedQuantity: qty,
       });
       return;
     }
+    resolvedStatus = 'received';
 
     const destRef = doc(db, 'items', destItemId(transfer.toShopId, transfer.itemId));
     const destSnap = await transaction.get(destRef);
@@ -115,4 +132,17 @@ export async function confirmReceipt(db, transferId, confirmedQuantity, confirme
       ...transfer, status: 'received', confirmedBy, confirmedAt: now, confirmedQuantity: qty,
     });
   });
+
+  // Best-effort, non-transactional follow-up: only fires when this
+  // transfer was created to fulfill a Restock Request AND it actually
+  // arrived (not disputed) — a disputed transfer leaves the request
+  // 'approved' rather than silently marking it fulfilled on a quantity
+  // mismatch. Separate from the transaction above because a
+  // `restockRequests` doc isn't part of the transfer/item write set the
+  // transaction already guards.
+  if (resolvedLinkedRequestId && resolvedStatus === 'received') {
+    await setDoc(doc(db, 'restockRequests', resolvedLinkedRequestId), {
+      status: 'fulfilled', fulfilledAt: now,
+    }, { merge: true });
+  }
 }

@@ -495,6 +495,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .activity-badge.activity-item_added, .activity-badge.activity-item_sold { background: #e3f7e8; color: #1c7a34; }
 .activity-badge.activity-item_removed, .activity-badge.activity-sale_cancelled { background: #fde3e3; color: #c1272d; }
 .activity-badge.activity-item_damaged, .activity-badge.activity-item_returned { background: #fff3cd; color: #93720b; }
-.activity-badge.activity-item_transferred { background: #e3ecfd; color: #1c4b9c; }
 .activity-badge.activity-inventory_adjusted { background: #eee7fb; color: #5b3ea6; }
+.activity-badge.activity-transfer_out, .activity-badge.activity-transfer_in { background: #e3ecfd; color: #1c4b9c; }
+.activity-badge.activity-restock_request_created { background: #e6f0ff; color: #1c4b9c; }
+.activity-badge.activity-restock_request_reviewed { background: #fff3cd; color: #93720b; }
+.activity-badge.activity-restock_request_fulfilled { background: #e3f7e8; color: #1c7a34; }
+
+/* Store-vs-Warehouse location type badge — src/shops/ShopsView.jsx,
+   Owner Dashboard's Users/alerts tables, and the Owner Activity Log's
+   shop filter all use this same small pill. */
+.shop-type-badge {
+  display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
+}
+.shop-type-badge.shop-type-store { background: #eef2f7; color: #4a5568; }
+.shop-type-badge.shop-type-warehouse { background: #fdeee3; color: #a15c1c; }
+.shops-list-name { display: flex; align-items: center; gap: 6px; }
+
+/* src/restock/RestockView.jsx */
+.restock-error { color: #c1272d; font-size: 13px; margin: 0 0 10px; }
+.restock-view h3 { margin-top: 24px; }
 .public-page-loading, .public-page-error { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #666; text-align: center; padding: 24px; }

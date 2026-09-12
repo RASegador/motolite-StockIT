@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   LayoutGrid, Boxes, ShoppingCart, AlertTriangle, Truck, Store, ShieldCheck, Tag, Receipt, LogOut,
-  ChevronDown, Menu, X, ClipboardList,
+  ChevronDown, Menu, X, ClipboardList, PackageSearch,
 } from 'lucide-react';
 import { can } from '../lib/permissions';
 import Tooltip from './Tooltip';
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { key: 'catalog', label: 'Categories/Locations/Suppliers', icon: Tag, permission: 'manageCategories' },
   { key: 'damage', label: 'Damaged/Returned', icon: AlertTriangle, permission: 'reportDamage' },
   { key: 'transfers', label: 'Branch Transfers', icon: Truck, permission: 'initiateTransfer' },
+  { key: 'restock', label: 'Restock', icon: PackageSearch, anyPermission: ['createRestockRequest', 'reviewRestockRequest'] },
   // Gated on 'viewOwnSales' OR 'viewSalesReports': 'viewOwnSales' is true
   // for Owner and Cashier (Owner sees every sale, Cashier sees only their
   // own — SalesHistory.jsx branches on role for which), and

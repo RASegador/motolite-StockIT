@@ -18,10 +18,16 @@
 // MOVEMENT_ACTIVITY_TYPES are surfaced here, so a transfer/damage-approval's
 // own plain movement entry (no activityType) doesn't create a confusing
 // duplicate of the dedicated transfer/damage-report entry below.
+// Note on "Restock alert generated": alerts are computed live, not stored
+// (see src/restock/restockAlerts.js), so there is no discrete write to
+// source an activity entry from — it's genuinely not a historical event,
+// just a current-state condition. Every OTHER action in the spec's list
+// maps onto one of these.
 export const ACTIVITY_TYPES = [
   'item_added', 'item_removed', 'inventory_adjusted',
   'item_sold', 'sale_cancelled', 'item_returned',
-  'item_damaged', 'item_transferred',
+  'item_damaged', 'transfer_out', 'transfer_in',
+  'restock_request_created', 'restock_request_reviewed', 'restock_request_fulfilled',
 ];
 
 const ACTIVITY_LABELS = {
@@ -32,7 +38,11 @@ const ACTIVITY_LABELS = {
   sale_cancelled: 'Sale Cancelled',
   item_returned: 'Item Returned',
   item_damaged: 'Item Damaged',
-  item_transferred: 'Item Transferred',
+  transfer_out: 'Transfer Out',
+  transfer_in: 'Transfer In',
+  restock_request_created: 'Restock Request Created',
+  restock_request_reviewed: 'Restock Request Approved/Rejected',
+  restock_request_fulfilled: 'Restock Request Fulfilled',
 };
 
 export function activityLabel(type) {
@@ -90,37 +100,137 @@ function fromDamageReports(reports) {
   }));
 }
 
+// One transfer produces up to two distinct log entries — "Transfer Out" at
+// initiation (always) and "Transfer In" at confirmation (once the
+// destination has actually confirmed/disputed it) — matching the spec's
+// Activity Log list, which tracks the two as separate actions rather than
+// one "transfer" event with a status.
 function fromTransfers(transfers) {
-  return (transfers || []).map((t) => ({
-    id: t.id,
-    timestamp: t.initiatedAt,
-    type: 'item_transferred',
-    userId: t.initiatedBy || null,
-    shopIds: [t.fromShopId, t.toShopId].filter(Boolean),
-    itemId: t.itemId || null,
-    quantity: t.quantity ?? null,
-    previousQuantity: null,
-    newQuantity: t.confirmedQuantity ?? null,
-    fromShopId: t.fromShopId || null,
-    toShopId: t.toShopId || null,
-    reason: 'Branch transfer',
-    notes: t.status === 'in_transit' ? 'In transit'
-      : t.status === 'received' ? `Received by ${t.confirmedBy || 'destination shop'}`
-      : t.status === 'disputed' ? `Disputed — confirmed qty ${t.confirmedQuantity}` : (t.status || ''),
-    status: t.status || 'in_transit',
-  }));
+  const entries = [];
+  (transfers || []).forEach((t) => {
+    entries.push({
+      id: `${t.id}-out`,
+      timestamp: t.initiatedAt,
+      type: 'transfer_out',
+      userId: t.initiatedBy || null,
+      shopIds: [t.fromShopId, t.toShopId].filter(Boolean),
+      itemId: t.itemId || null,
+      quantity: t.quantity ?? null,
+      previousQuantity: null,
+      newQuantity: null,
+      fromShopId: t.fromShopId || null,
+      toShopId: t.toShopId || null,
+      reason: 'Transfer initiated',
+      notes: t.status === 'in_transit' ? 'In transit — awaiting confirmation' : '',
+      status: t.status || 'in_transit',
+    });
+    if (t.confirmedAt) {
+      entries.push({
+        id: `${t.id}-in`,
+        timestamp: t.confirmedAt,
+        type: 'transfer_in',
+        userId: t.confirmedBy || null,
+        shopIds: [t.fromShopId, t.toShopId].filter(Boolean),
+        itemId: t.itemId || null,
+        quantity: t.confirmedQuantity ?? null,
+        previousQuantity: null,
+        newQuantity: null,
+        fromShopId: t.fromShopId || null,
+        toShopId: t.toShopId || null,
+        reason: 'Transfer confirmed',
+        notes: t.status === 'disputed'
+          ? `Disputed — shipped ${t.quantity}, confirmed ${t.confirmedQuantity}`
+          : `Received ${t.confirmedQuantity} of ${t.quantity} shipped`,
+        status: t.status || 'received',
+      });
+    }
+  });
+  return entries;
 }
 
-// Combines every source into one feed, newest first. All four hooks this
-// is fed from (`useMovementsLog`, `useDamageReports`, `useTransfers`,
-// and — for item/shop/user name lookups only, not as an entry source —
-// `useItems`/`useShops`/`useUsers`) are called with `{ role: 'owner' }` by
-// the caller, so no shop is silently excluded here.
-export function buildActivityFeed({ movements, damageReports, transfers }) {
+function restockRequestNotes(r) {
+  if (r.status === 'pending') return `Requested ${r.requestedQty} — pending review`;
+  if (r.status === 'approved') return `Approved by ${r.reviewedBy || '—'}${r.transferId ? ` (transfer ${r.transferId})` : ''}`;
+  if (r.status === 'rejected') return `Rejected by ${r.reviewedBy || '—'}${r.notes ? `: ${r.notes}` : ''}`;
+  if (r.status === 'fulfilled') return 'Fulfilled — matching transfer confirmed';
+  if (r.status === 'cancelled') return 'Cancelled by requester';
+  return '';
+}
+
+// A single restock request can surface up to three log entries across its
+// lifecycle: created (always), reviewed (once approved/rejected), and
+// fulfilled (once the linked transfer is confirmed) — see
+// src/restock/restockRequestActions.js for what writes each timestamp.
+function fromRestockRequests(requests) {
+  const entries = [];
+  (requests || []).forEach((r) => {
+    entries.push({
+      id: `${r.id}-created`,
+      timestamp: r.createdAt,
+      type: 'restock_request_created',
+      userId: r.requestedBy || null,
+      shopIds: r.requestingShopId ? [r.requestingShopId] : [],
+      itemId: r.itemId || null,
+      quantity: r.requestedQty ?? null,
+      previousQuantity: null, newQuantity: null,
+      fromShopId: null, toShopId: null,
+      reason: 'Restock request submitted',
+      notes: restockRequestNotes({ ...r, status: 'pending' }),
+      status: r.status || 'pending',
+    });
+    // `status` may have already moved on to 'fulfilled' by the time this
+    // is read — that still means it WAS reviewed (approved) at some point,
+    // so the reviewed entry is keyed off `reviewedAt` existing at all, not
+    // off the current status still being 'approved'/'rejected'.
+    if (r.reviewedAt) {
+      const reviewedStatus = r.status === 'fulfilled' ? 'approved' : r.status;
+      entries.push({
+        id: `${r.id}-reviewed`,
+        timestamp: r.reviewedAt,
+        type: 'restock_request_reviewed',
+        userId: r.reviewedBy || null,
+        shopIds: r.requestingShopId ? [r.requestingShopId] : [],
+        itemId: r.itemId || null,
+        quantity: r.requestedQty ?? null,
+        previousQuantity: null, newQuantity: null,
+        fromShopId: null, toShopId: null,
+        reason: `Restock request ${reviewedStatus}`,
+        notes: restockRequestNotes({ ...r, status: reviewedStatus }),
+        status: reviewedStatus,
+      });
+    }
+    if (r.fulfilledAt) {
+      entries.push({
+        id: `${r.id}-fulfilled`,
+        timestamp: r.fulfilledAt,
+        type: 'restock_request_fulfilled',
+        userId: null,
+        shopIds: r.requestingShopId ? [r.requestingShopId] : [],
+        itemId: r.itemId || null,
+        quantity: r.requestedQty ?? null,
+        previousQuantity: null, newQuantity: null,
+        fromShopId: null, toShopId: null,
+        reason: 'Restock request fulfilled',
+        notes: restockRequestNotes(r),
+        status: 'fulfilled',
+      });
+    }
+  });
+  return entries;
+}
+
+// Combines every source into one feed, newest first. Every hook this is
+// fed from (`useMovementsLog`, `useDamageReports`, `useTransfers`,
+// `useRestockRequests`, and — for item/shop/user name lookups only, not as
+// an entry source — `useItems`/`useShops`/`useUsers`) is called with
+// `{ role: 'owner' }` (or `'warehouse'`, which also sees every request) by
+// the caller, so no location is silently excluded here.
+export function buildActivityFeed({ movements, damageReports, transfers, restockRequests }) {
   const entries = [
     ...fromMovements(movements),
     ...fromDamageReports(damageReports),
     ...fromTransfers(transfers),
+    ...fromRestockRequests(restockRequests),
   ];
   return entries.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 }

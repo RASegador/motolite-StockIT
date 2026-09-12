@@ -13,6 +13,7 @@ import UsersView from './users/UsersView';
 import CatalogManager from './catalog/CatalogManager';
 import OwnerDashboard from './reports/OwnerDashboard';
 import OwnerActivityLog from './reports/OwnerActivityLog';
+import RestockView from './restock/RestockView';
 import ShopReports from './reports/ShopReports';
 import SalesHistory from './reports/SalesHistory';
 import { useShops } from './shops/useShops';
@@ -148,6 +149,10 @@ export default function App() {
         return can(role, 'manageUsers') ? <UsersView currentUid={user.uid} /> : defaultView();
       case 'activityLog':
         return can(role, 'viewActivityLog') ? <OwnerActivityLog /> : defaultView();
+      case 'restock':
+        return (can(role, 'createRestockRequest') || can(role, 'reviewRestockRequest'))
+          ? requireOwnerShop(<RestockView role={role} shopId={writeShopId} userId={user.uid} />)
+          : defaultView();
       case 'overview':
       default:
         return defaultView();

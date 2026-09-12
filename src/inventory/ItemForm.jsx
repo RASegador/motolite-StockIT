@@ -6,6 +6,7 @@ import { saveItem } from './inventoryActions';
 import { db } from '../firebase';
 import { newId } from '../lib/format';
 import { generateBarcode } from '../lib/barcode';
+import { generateSku } from '../lib/sku';
 import ProductCodes from '../barcode/ProductCodes';
 import Modal from '../shared/Modal';
 
@@ -36,8 +37,12 @@ function blankDraft() {
   // placeholder that would change after the first save.
   const id = newId('i');
   return {
-    id, barcode: generateBarcode(id),
-    sku: '', name: '', category: '', location: '', supplierIds: [],
+    // Auto-generated the moment the "Add Item" form opens — see
+    // src/lib/sku.js. This SKU never changes again, including when the
+    // item is later transferred between locations (transfers never touch
+    // `sku` — see transferActions.js).
+    id, barcode: generateBarcode(id), sku: generateSku(id),
+    name: '', category: '', location: '', supplierIds: [],
     baseUnitName: 'Piece', baseUnitStock: 0, units: [],
     unitCost: 0, markupType: 'percent', markupValue: 0,
     batteryModel: '', voltage: 12, capacity: '', warrantyMonths: 12, vehicleType: '',
@@ -141,7 +146,12 @@ export default function ItemForm({ item, shopId, role, userId, onDone }) {
     <form onSubmit={handleSubmit} className="item-form">
       <Section title="Item">
         <Field label="SKU">
-          <input value={draft.sku} onChange={set('sku')} required />
+          {/* Auto-generated and read-only for a brand-new item (never
+              editable at creation time, so it can never collide or drift);
+              an existing item's SKU stays editable here only to correct a
+              pre-this-feature manually-entered one, and is otherwise never
+              touched again — see src/lib/sku.js and saveItem(). */}
+          <input value={draft.sku} onChange={set('sku')} required readOnly={isNewItem} disabled={isNewItem} />
         </Field>
         <Field label="Name">
           <input value={draft.name} onChange={set('name')} required />

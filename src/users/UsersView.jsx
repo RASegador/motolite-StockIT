@@ -14,7 +14,7 @@ import QRCodeImage from '../barcode/QRCodeImage';
 // creatable or assignable from this screen. Firestore rules enforce the
 // same restriction server-side; this is just the UI staying consistent
 // with what the rules would refuse anyway.
-const CREATABLE_ROLES = ['manager', 'cashier'];
+const CREATABLE_ROLES = ['manager', 'cashier', 'warehouse'];
 const BLANK_FORM = { username: '', fullName: '', role: 'cashier', shopId: '' };
 
 function OwnUsernameField({ uid, current }) {
@@ -107,7 +107,7 @@ export default function UsersView({ currentUid }) {
                 <span className="item-form-field-label">Shop</span>
                 <select value={form.shopId} onChange={(e) => setForm({ ...form, shopId: e.target.value })} required>
                   <option value="">Assign shop…</option>
-                  {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {shops.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.type === 'warehouse' ? 'Warehouse' : 'Store'})</option>)}
                 </select>
               </label>
             </div>
@@ -177,7 +177,7 @@ export default function UsersView({ currentUid }) {
                 {u.role === 'owner' ? '—' : (
                   <select value={u.shopId || ''} onChange={(e) => updateUserShop(u.uid, e.target.value)}>
                     <option value="">Unassigned</option>
-                    {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {shops.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.type === 'warehouse' ? 'Warehouse' : 'Store'})</option>)}
                   </select>
                 )}
               </td>

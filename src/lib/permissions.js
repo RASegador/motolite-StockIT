@@ -19,6 +19,7 @@ export const PERMISSIONS = {
     reportDamage: true, approveDamage: true,
     manageUsers: true, manageShops: true, viewOwnSales: true,
     viewConsolidatedReports: true, viewActivityLog: true,
+    createRestockRequest: true, reviewRestockRequest: true,
   },
   manager: {
     viewInventory: true, editInventory: true, deleteInventory: true,
@@ -29,6 +30,9 @@ export const PERMISSIONS = {
     reportDamage: true, approveDamage: true,
     manageUsers: false, manageShops: false, viewOwnSales: false,
     viewConsolidatedReports: false, viewActivityLog: false,
+    // A store Manager can submit a Restock Request to the warehouse, but
+    // reviewing/approving one is a Warehouse/Owner-only action per spec.
+    createRestockRequest: true, reviewRestockRequest: false,
   },
   cashier: {
     viewInventory: true, editInventory: false, deleteInventory: false,
@@ -39,6 +43,23 @@ export const PERMISSIONS = {
     reportDamage: true, approveDamage: false,
     manageUsers: false, manageShops: false, viewOwnSales: true,
     viewConsolidatedReports: false, viewActivityLog: false,
+    createRestockRequest: false, reviewRestockRequest: false,
+  },
+  // Warehouse staff: their own login, scoped to one assigned warehouse
+  // (a `shops` doc with `type: 'warehouse'` — see src/shops/shopActions.js).
+  // They receive/ship stock and fulfill Restock Requests, but never touch
+  // POS, never see the Owner's global dashboard, and never manage users or
+  // system-wide settings — per the "Warehouse users should NOT" list.
+  warehouse: {
+    viewInventory: true, editInventory: false, deleteInventory: false,
+    manageCategories: false, manageSuppliers: false, manageLocations: false,
+    stockReceive: true, stockIssue: true, editMarkup: false,
+    pos: false, viewReports: true, viewSalesReports: false, print: true, cancelSales: false,
+    initiateTransfer: true, confirmTransfer: true,
+    reportDamage: true, approveDamage: true,
+    manageUsers: false, manageShops: false, viewOwnSales: false,
+    viewConsolidatedReports: false, viewActivityLog: false,
+    createRestockRequest: true, reviewRestockRequest: true,
   },
 };
 

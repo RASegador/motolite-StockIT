@@ -3,10 +3,19 @@ import { getItemUnits, totalBaseUnits, cascadeDeductUnit, getUnitCounts } from '
 import { computeSellingPrice } from '../lib/pricing';
 import { newId } from '../lib/format';
 import { buildPublicProduct } from '../lib/receipts';
+import { generateSku } from '../lib/sku';
 
 export async function saveItem(db, draft, { shopId: activeShopId, actorId } = {}) {
   const id = draft.id || newId('i');
   const baseUnitName = draft.baseUnitName || 'Piece';
+  // Auto-generate a SKU on create if the caller/form didn't already supply
+  // one (ItemForm auto-fills this itself, but this is a safety net for any
+  // other creation path — e.g. a script or future bulk-import — so a SKU
+  // is never left blank). Once set, this is never touched again on edit,
+  // and NEVER regenerated just because the item's shopId changes (a
+  // transfer never calls saveItem at all — see transferActions.js) — the
+  // one thing the spec explicitly requires.
+  const sku = draft.sku || generateSku(id);
   // Preserve an existing item's own shopId on edit (the loaded item is
   // spread into the form's draft, so draft.shopId is already correct for
   // an edit); fall back to the caller-supplied active shop only when
@@ -29,7 +38,7 @@ export async function saveItem(db, draft, { shopId: activeShopId, actorId } = {}
   const sellingPrice = computeSellingPrice(draft.unitCost, draft.markupType || 'percent', draft.markupValue || 0);
 
   const savedItem = {
-    ...draft, id, shopId, quantity, unitStock, baseUnitName, sellingPrice,
+    ...draft, id, shopId, quantity, unitStock, baseUnitName, sellingPrice, sku,
     reservedForReview: draft.reservedForReview ?? 0,
     units: (draft.units || []).map(({ stock, ...u }) => u),
   };
