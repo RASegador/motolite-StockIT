@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShoppingCart, Search } from 'lucide-react';
+import { ShoppingCart, Search, Plus, Minus } from 'lucide-react';
 import { useItems } from '../inventory/useItems';
 import { getItemUnits } from '../lib/units';
 import { currency } from '../lib/format';
@@ -16,27 +16,36 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
   const [error, setError] = useState('');
   const [completedSale, setCompletedSale] = useState(null);
 
-  const results = items.filter((it) => {
-    const q = search.toLowerCase();
-    return q.length > 0 && (
-      it.sku?.toLowerCase().includes(q) || it.name?.toLowerCase().includes(q)
-      || it.batteryModel?.toLowerCase().includes(q) || it.vehicleType?.toLowerCase().includes(q)
-    );
-  });
+  const q = search.trim().toLowerCase();
+  const visibleItems = q.length === 0 ? items : items.filter((it) =>
+    it.sku?.toLowerCase().includes(q) || it.name?.toLowerCase().includes(q)
+    || it.batteryModel?.toLowerCase().includes(q) || it.vehicleType?.toLowerCase().includes(q)
+  );
 
-  function addToCart(item) {
-    const unit = getItemUnits(item)[0];
+  function cartQtyFor(itemId, unitName) {
+    return cart.find((l) => l.itemId === itemId && l.unitName === unitName)?.qty || 0;
+  }
+
+  function setLineQty(item, unit, qty) {
     setCart((prev) => {
-      const existing = prev.find((l) => l.itemId === item.id && l.unitName === unit.name);
-      if (existing) {
-        return prev.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l));
-      }
-      return [...prev, {
-        itemId: item.id, sku: item.sku, name: item.name, qty: 1,
+      const withoutLine = prev.filter((l) => !(l.itemId === item.id && l.unitName === unit.name));
+      if (qty <= 0) return withoutLine;
+      return [...withoutLine, {
+        itemId: item.id, sku: item.sku, name: item.name, qty,
         unitName: unit.name, unitPrice: unit.price, factor: unit.factor,
       }];
     });
-    setSearch('');
+  }
+
+  function bumpQty(item, delta) {
+    const unit = getItemUnits(item)[0];
+    const current = cartQtyFor(item.id, unit.name);
+    const next = Math.max(0, Math.min(item.quantity, current + delta));
+    setLineQty(item, unit, next);
+  }
+
+  function addToCart(item) {
+    bumpQty(item, 1);
   }
 
   // A hardware scanner keystroke-burst resolves to a barcode string here;
@@ -63,28 +72,62 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
 
   return (
     <div className="pos-view">
-      <div className="pos-search">
-        <Search size={16} />
-        <input placeholder="Search SKU, name, model, vehicle type…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        {results.length > 0 && (
-          <ul className="pos-search-results">
-            {results.map((it) => (
-              <li key={it.id} onClick={() => addToCart(it)}>
-                {it.sku} — {it.name} ({currency(it.sellingPrice)}) — {it.quantity} in stock
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="pos-main">
+        <div className="pos-search">
+          <Search size={16} />
+          <input placeholder="Search SKU, name, model, vehicle type…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+
+        <div className="pos-grid">
+          {visibleItems.map((it) => {
+            const unit = getItemUnits(it)[0];
+            const qty = cartQtyFor(it.id, unit.name);
+            return (
+              <div className="pos-item-card" key={it.id}>
+                <div className="pos-item-card-info">
+                  <p className="pos-item-card-name">{it.name}</p>
+                  <p className="pos-item-card-sku">{it.sku}</p>
+                  <p className="pos-item-card-price">{currency(it.sellingPrice)}</p>
+                  <p className="pos-item-card-stock">{it.quantity} in stock</p>
+                </div>
+                <div className="qty-stepper">
+                  <button type="button" onClick={() => bumpQty(it, -1)} disabled={qty === 0} aria-label={`Remove one ${it.name}`}>
+                    <Minus size={14} />
+                  </button>
+                  <span>{qty}</span>
+                  <button type="button" onClick={() => bumpQty(it, 1)} disabled={qty >= it.quantity} aria-label={`Add one ${it.name}`}>
+                    <Plus size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {visibleItems.length === 0 && <p className="pos-empty">No items match your search.</p>}
+        </div>
       </div>
 
-      <div className="pos-cart">
+      <div className="pos-cart-card">
         <h3><ShoppingCart size={16} /> Cart</h3>
-        <ul>
-          {cart.map((line, i) => (
-            <li key={i}>
-              {line.sku} × {line.qty} {line.unitName} — {currency(line.unitPrice * line.qty)}
+        <ul className="pos-cart-lines">
+          {cart.map((line) => {
+            const item = items.find((it) => it.id === line.itemId);
+            return (
+            <li key={`${line.itemId}-${line.unitName}`}>
+              <span className="pos-cart-line-name">{line.sku} — {line.name}</span>
+              <div className="qty-stepper">
+                <button type="button" onClick={() => item ? bumpQty(item, -1) : setLineQty({ id: line.itemId }, { name: line.unitName, price: line.unitPrice, factor: line.factor }, line.qty - 1)} aria-label={`Remove one ${line.name}`}>
+                  <Minus size={14} />
+                </button>
+                <span>{line.qty}</span>
+                <button type="button" onClick={() => item && bumpQty(item, 1)} disabled={item && line.qty >= item.quantity} aria-label={`Add one ${line.name}`}>
+                  <Plus size={14} />
+                </button>
+              </div>
+              <span className="pos-cart-line-total">{currency(line.unitPrice * line.qty)}</span>
             </li>
-          ))}
+            );
+          })}
+          {cart.length === 0 && <li className="pos-empty">Cart is empty.</li>}
         </ul>
         <p className="pos-total">Total: {currency(total)}</p>
         <input placeholder="Amount received" type="number" value={amountReceived}

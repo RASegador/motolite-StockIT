@@ -21,3 +21,31 @@ th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
 .stat-tile strong { font-size: 20px; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
 .modal form { background: #fff; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; min-width: 280px; }
+
+.pos-view { display: flex; gap: 20px; align-items: flex-start; }
+.pos-main { flex: 1; min-width: 0; }
+.pos-search { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 8px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 16px; }
+.pos-search input { border: none; outline: none; flex: 1; font-size: 14px; }
+.pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.pos-item-card { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 8px; }
+.pos-item-card-name { font-weight: 600; margin: 0; }
+.pos-item-card-sku, .pos-item-card-stock { margin: 0; font-size: 12px; color: #666; }
+.pos-item-card-price { margin: 0; font-size: 16px; color: var(--motolite-red); font-weight: 600; }
+.pos-empty { color: #666; font-size: 13px; grid-column: 1 / -1; }
+
+.qty-stepper { display: flex; align-items: center; gap: 8px; }
+.qty-stepper button { border: 1px solid #ddd; background: #fff; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.qty-stepper button:disabled { opacity: 0.4; cursor: not-allowed; }
+.qty-stepper span { min-width: 20px; text-align: center; font-weight: 600; }
+
+.pos-cart-card { width: 320px; flex-shrink: 0; background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: sticky; top: 24px; display: flex; flex-direction: column; gap: 8px; }
+.pos-cart-card h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
+.pos-cart-lines { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.pos-cart-lines li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.pos-cart-line-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos-cart-line-total { font-weight: 600; min-width: 64px; text-align: right; }
+.pos-total { font-size: 18px; font-weight: 700; margin: 8px 0; }
+.pos-cart-card input { padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
+.pos-cart-card button:not(.qty-stepper button) { background: var(--motolite-red); color: #fff; border: none; border-radius: 6px; padding: 10px; font-weight: 600; cursor: pointer; }
+.pos-cart-card button:disabled { opacity: 0.5; cursor: not-allowed; }
+.pos-error { color: #c1272d; font-size: 13px; margin: 0; }
