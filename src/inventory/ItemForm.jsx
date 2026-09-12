@@ -170,11 +170,11 @@ export default function ItemForm({ item, shopId, role, onDone }) {
                 {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>
-            <p className="item-form-shop-confirm">
-              {draft.shopId
-                ? <>This item will be added to <strong>{selectedShopName || draft.shopId}</strong>.</>
-                : 'Choose which shop this item belongs to before saving.'}
-            </p>
+            {draft.shopId && (
+              <p className="item-form-shop-confirm">
+                This item will be added to <strong>{selectedShopName || draft.shopId}</strong>.
+              </p>
+            )}
           </div>
         ) : (
           <p className="item-form-shop-confirm">
