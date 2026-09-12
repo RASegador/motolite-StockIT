@@ -44,6 +44,31 @@ function blankDraft() {
   };
 }
 
+// Plain label+control pair, no bordered box around it — the "boxy" look
+// came from every group being a browser-default <fieldset>, not from the
+// individual inputs, so this just gives each field a real <label> (there
+// weren't any before — placeholder text was standing in for one) stacked
+// above the control.
+function Field({ label, children, className = '' }) {
+  return (
+    <label className={`item-form-field ${className}`.trim()}>
+      <span className="item-form-field-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+// A section is spacing + a small heading, not a bordered container — the
+// grouping reads from whitespace and typography instead of a box.
+function Section({ title, children }) {
+  return (
+    <div className="item-form-section">
+      <h4 className="item-form-section-title">{title}</h4>
+      <div className="item-form-grid">{children}</div>
+    </div>
+  );
+}
+
 export default function ItemForm({ item, shopId, role, onDone }) {
   const categories = useCategories();
   const locations = useLocations();
@@ -106,91 +131,131 @@ export default function ItemForm({ item, shopId, role, onDone }) {
 
   return (
     <form onSubmit={handleSubmit} className="item-form">
-      <input placeholder="SKU" value={draft.sku} onChange={set('sku')} required />
-      <input placeholder="Name" value={draft.name} onChange={set('name')} required />
+      <Section title="Item">
+        <Field label="SKU">
+          <input value={draft.sku} onChange={set('sku')} required />
+        </Field>
+        <Field label="Name">
+          <input value={draft.name} onChange={set('name')} required />
+        </Field>
+        <Field label="Category">
+          <select value={draft.category} onChange={set('category')}>
+            <option value="">Category…</option>
+            {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Location">
+          <select value={draft.location} onChange={set('location')}>
+            <option value="">Location…</option>
+            {locations.map((l) => <option key={l.id} value={l.name}>{l.name}</option>)}
+          </select>
+        </Field>
+      </Section>
 
-      <select value={draft.category} onChange={set('category')}>
-        <option value="">Category…</option>
-        {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-      </select>
-      <select value={draft.location} onChange={set('location')}>
-        <option value="">Location…</option>
-        {locations.map((l) => <option key={l.id} value={l.name}>{l.name}</option>)}
-      </select>
-
-      <fieldset className="item-form-shop">
-        <legend>Shop</legend>
+      <div className="item-form-section">
+        <h4 className="item-form-section-title">Shop</h4>
         {canPickShop ? (
-          <>
-            <select value={draft.shopId || ''} onChange={set('shopId')} required aria-label="Shop">
-              <option value="">Select a shop…</option>
-              {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="item-form-grid">
+            <Field label="Shop" className="item-form-shop-field">
+              <select value={draft.shopId || ''} onChange={set('shopId')} required>
+                <option value="">Select a shop…</option>
+                {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </Field>
             <p className="item-form-shop-confirm">
               {draft.shopId
                 ? <>This item will be added to <strong>{selectedShopName || draft.shopId}</strong>.</>
                 : 'Choose which shop this item belongs to before saving.'}
             </p>
-          </>
+          </div>
         ) : (
           <p className="item-form-shop-confirm">
             {selectedShopName ? <>Shop: <strong>{selectedShopName}</strong></> : 'Shop: —'}
           </p>
         )}
-      </fieldset>
+      </div>
 
-      <fieldset>
-        <legend>Battery details</legend>
-        <input placeholder="Battery model (e.g. N50)" value={draft.batteryModel} onChange={set('batteryModel')} />
-        <input type="number" placeholder="Voltage" value={draft.voltage} onChange={set('voltage')} />
-        <input placeholder="Capacity (e.g. 35Ah/320CCA)" value={draft.capacity} onChange={set('capacity')} />
-        <input type="number" placeholder="Warranty (months)" value={draft.warrantyMonths} onChange={set('warrantyMonths')} />
-        <input placeholder="Vehicle type" value={draft.vehicleType} onChange={set('vehicleType')} list="vehicle-type-suggestions" />
-        <datalist id="vehicle-type-suggestions">
-          {VEHICLE_TYPE_SUGGESTIONS.map((v) => <option key={v} value={v} />)}
-        </datalist>
-      </fieldset>
+      <Section title="Battery details">
+        <Field label="Battery model">
+          <input placeholder="e.g. N50" value={draft.batteryModel} onChange={set('batteryModel')} />
+        </Field>
+        <Field label="Voltage">
+          <input type="number" value={draft.voltage} onChange={set('voltage')} />
+        </Field>
+        <Field label="Capacity">
+          <input placeholder="e.g. 35Ah/320CCA" value={draft.capacity} onChange={set('capacity')} />
+        </Field>
+        <Field label="Warranty (months)">
+          <input type="number" value={draft.warrantyMonths} onChange={set('warrantyMonths')} />
+        </Field>
+        <Field label="Vehicle type">
+          <input value={draft.vehicleType} onChange={set('vehicleType')} list="vehicle-type-suggestions" />
+          <datalist id="vehicle-type-suggestions">
+            {VEHICLE_TYPE_SUGGESTIONS.map((v) => <option key={v} value={v} />)}
+          </datalist>
+        </Field>
+      </Section>
 
-      <fieldset>
-        <legend>Stock &amp; pricing</legend>
-        <input type="number" placeholder="Starting stock (Pieces)" value={draft.baseUnitStock} onChange={set('baseUnitStock')} />
-        <input type="number" placeholder="Base cost" value={draft.unitCost} onChange={set('unitCost')} />
-        <select value={draft.markupType} onChange={set('markupType')}>
-          <option value="percent">Markup %</option>
-          <option value="fixed">Markup ₱</option>
-        </select>
-        <input type="number" placeholder="Markup value" value={draft.markupValue} onChange={set('markupValue')} />
-        <p>Selling price preview: ₱{previewPrice.toFixed(2)}</p>
-      </fieldset>
+      <Section title="Stock & pricing">
+        <Field label="Starting stock (Pieces)">
+          <input type="number" value={draft.baseUnitStock} onChange={set('baseUnitStock')} />
+        </Field>
+        <Field label="Base cost">
+          <input type="number" value={draft.unitCost} onChange={set('unitCost')} />
+        </Field>
+        <Field label="Markup type">
+          <select value={draft.markupType} onChange={set('markupType')}>
+            <option value="percent">Markup %</option>
+            <option value="fixed">Markup ₱</option>
+          </select>
+        </Field>
+        <Field label="Markup value">
+          <input type="number" value={draft.markupValue} onChange={set('markupValue')} />
+        </Field>
+        <p className="item-form-price-preview">Selling price preview: ₱{previewPrice.toFixed(2)}</p>
+      </Section>
 
-      <fieldset>
-        <legend>Extra units (Pack/Box/Case…)</legend>
+      <div className="item-form-section">
+        <h4 className="item-form-section-title">Extra units (Pack/Box/Case…)</h4>
         {(draft.units || []).map((u, idx) => (
           <div className="item-form-unit-row" key={idx}>
-            <input placeholder="Unit name (e.g. Pack)" value={u.name} onChange={setUnitRow(idx, 'name')} />
-            <input type="number" placeholder="Factor (base units per unit)" value={u.factor} onChange={setUnitRow(idx, 'factor')} />
-            <input type="number" placeholder="Cost" value={u.cost} onChange={setUnitRow(idx, 'cost')} />
-            <input type="number" placeholder="Price" value={u.price} onChange={setUnitRow(idx, 'price')} />
-            <input type="number" placeholder="Stock" value={u.stock} onChange={setUnitRow(idx, 'stock')} />
-            <button type="button" className="btn-danger" onClick={() => removeUnitRow(idx)}>Remove</button>
+            <Field label="Unit name" className="item-form-unit-field">
+              <input placeholder="e.g. Pack" value={u.name} onChange={setUnitRow(idx, 'name')} />
+            </Field>
+            <Field label="Factor" className="item-form-unit-field">
+              <input type="number" placeholder="Base units per unit" value={u.factor} onChange={setUnitRow(idx, 'factor')} />
+            </Field>
+            <Field label="Cost" className="item-form-unit-field">
+              <input type="number" value={u.cost} onChange={setUnitRow(idx, 'cost')} />
+            </Field>
+            <Field label="Price" className="item-form-unit-field">
+              <input type="number" value={u.price} onChange={setUnitRow(idx, 'price')} />
+            </Field>
+            <Field label="Stock" className="item-form-unit-field">
+              <input type="number" value={u.stock} onChange={setUnitRow(idx, 'stock')} />
+            </Field>
+            <button type="button" className="btn-danger item-form-unit-remove" onClick={() => removeUnitRow(idx)}>Remove</button>
           </div>
         ))}
         <button type="button" className="btn-secondary" onClick={addUnitRow}>+ Add unit</button>
-      </fieldset>
+      </div>
 
-      <fieldset>
-        <legend>Reorder point</legend>
-        <input type="number" placeholder="Reorder point" value={draft.reorderPoint ?? 0} onChange={set('reorderPoint')} />
-        <select value={draft.reorderUnit || draft.baseUnitName || 'Piece'} onChange={set('reorderUnit')}>
-          {reorderUnitOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-        </select>
-      </fieldset>
+      <Section title="Reorder point">
+        <Field label="Reorder point">
+          <input type="number" value={draft.reorderPoint ?? 0} onChange={set('reorderPoint')} />
+        </Field>
+        <Field label="Reorder unit">
+          <select value={draft.reorderUnit || draft.baseUnitName || 'Piece'} onChange={set('reorderUnit')}>
+            {reorderUnitOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </Field>
+      </Section>
 
-      <fieldset>
-        <legend>Barcode &amp; QR Code</legend>
+      <div className="item-form-section">
+        <h4 className="item-form-section-title">Barcode &amp; QR code</h4>
         <p className="item-form-codes-hint">Generated automatically and linked to this product — cannot be edited.</p>
         <ProductCodes item={draft} />
-      </fieldset>
+      </div>
 
       {error && <p className="item-form-error">{error}</p>}
       <div className="form-actions">

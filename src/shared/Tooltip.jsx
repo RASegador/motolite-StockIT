@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 const HOVER_DELAY_MS = 400;
 const LONG_PRESS_MS = 500;
@@ -11,15 +12,33 @@ const LONG_PRESS_MS = 500;
 // (500ms) shows the tooltip instead and suppresses the synthetic click
 // mobile browsers fire after touchend, so checking what a destructive
 // action (e.g. Delete) does doesn't accidentally trigger it.
+//
+// The bubble is rendered through a portal into document.body, positioned
+// with `position: fixed` from the trigger's live getBoundingClientRect().
+// Every icon-button group that needed this (Inventory's table wrapper,
+// POS's scrollable cart-lines list) sets `overflow-x: auto` without an
+// explicit overflow-y — and per the CSS overflow spec, pairing a
+// non-visible x with an unset y silently computes the y axis to `auto`
+// too, clipping anything positioned outside the container's box. A plain
+// `position: absolute` bubble nested inside one of those was rendering,
+// just invisibly clipped. Portaling to <body> escapes that entirely.
 export default function Tooltip({ label, children, className = '' }) {
   const [visible, setVisible] = useState(false);
+  const [coords, setCoords] = useState(null);
+  const wrapRef = useRef(null);
   const hoverTimer = useRef(null);
   const touchTimer = useRef(null);
   const longPressed = useRef(false);
 
+  function computeCoords() {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setCoords({ top: rect.top, left: rect.left + rect.width / 2 });
+  }
+
   function showAfterDelay() {
     clearTimeout(hoverTimer.current);
-    hoverTimer.current = setTimeout(() => setVisible(true), HOVER_DELAY_MS);
+    hoverTimer.current = setTimeout(() => { computeCoords(); setVisible(true); }, HOVER_DELAY_MS);
   }
   function hideNow() {
     clearTimeout(hoverTimer.current);
@@ -30,6 +49,7 @@ export default function Tooltip({ label, children, className = '' }) {
     longPressed.current = false;
     touchTimer.current = setTimeout(() => {
       longPressed.current = true;
+      computeCoords();
       setVisible(true);
     }, LONG_PRESS_MS);
   }
@@ -46,6 +66,7 @@ export default function Tooltip({ label, children, className = '' }) {
 
   return (
     <span
+      ref={wrapRef}
       className={`tooltip-wrap ${className}`.trim()}
       onMouseEnter={showAfterDelay}
       onMouseLeave={hideNow}
@@ -56,9 +77,16 @@ export default function Tooltip({ label, children, className = '' }) {
       onTouchCancel={handleTouchCancel}
     >
       {children}
-      <span className={`tooltip-bubble${visible ? ' tooltip-visible' : ''}`} role="tooltip">
-        {label}
-      </span>
+      {visible && coords && createPortal(
+        <span
+          className="tooltip-bubble tooltip-visible"
+          role="tooltip"
+          style={{ top: coords.top, left: coords.left }}
+        >
+          {label}
+        </span>,
+        document.body
+      )}
     </span>
   );
 }
