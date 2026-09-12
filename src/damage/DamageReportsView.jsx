@@ -41,7 +41,7 @@ export default function DamageReportsView({ role, shopId, userId }) {
           <select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}>
             {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
-          <button type="submit">Report</button>
+          <button type="submit" className="btn-primary">Report</button>
         </form>
       )}
       {error && <p className="damage-error">{error}</p>}
@@ -61,10 +61,10 @@ export default function DamageReportsView({ role, shopId, userId }) {
                 <td>{r.status}</td>
                 <td>
                   {r.status === 'pending' && can(role, 'approveDamage') && (
-                    <>
-                      <button onClick={() => approveDamage(db, r.id, userId)}>Approve</button>
-                      <button onClick={() => rejectDamage(db, r.id, userId)}>Reject</button>
-                    </>
+                    <div className="list-row-actions">
+                      <button className="btn-danger" onClick={() => rejectDamage(db, r.id, userId)}>Reject</button>
+                      <button className="btn-primary" onClick={() => approveDamage(db, r.id, userId)}>Approve</button>
+                    </div>
                   )}
                 </td>
               </tr>

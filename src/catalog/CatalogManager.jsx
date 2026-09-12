@@ -24,16 +24,18 @@ function ListEditor({ icon, title, rows, onAdd, onRemove, renderLabel }) {
       <h3>{icon} {title}</h3>
       <form onSubmit={handleAdd}>
         <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Add ${title.toLowerCase()}`} />
-        <button type="submit">Add</button>
+        <button type="submit" className="btn-primary">Add</button>
       </form>
       {error && <p className="catalog-error">{error}</p>}
       <ul>
         {rows.map((row) => (
-          <li key={row.id}>
+          <li key={row.id} className="list-row">
             <span>{renderLabel ? renderLabel(row) : row.name}</span>
-            <button onClick={async () => {
-              try { await onRemove(row.name); } catch (err) { setError(err.message); }
-            }}>Remove</button>
+            <div className="list-row-actions">
+              <button className="btn-danger" onClick={async () => {
+                try { await onRemove(row.name); } catch (err) { setError(err.message); }
+              }}>Remove</button>
+            </div>
           </li>
         ))}
       </ul>

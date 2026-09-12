@@ -42,8 +42,10 @@ export default function RestockModal({ item, onClose }) {
         </select>
         <input placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
         {error && <p className="modal-error">{error}</p>}
-        <button type="submit">Confirm restock</button>
-        <button type="button" onClick={onClose}>Cancel</button>
+        <div className="form-actions">
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary">Confirm restock</button>
+        </div>
       </form>
     </div>
   );

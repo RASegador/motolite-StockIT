@@ -36,27 +36,31 @@ export default function ShopsView() {
       <h2><Store size={18} /> Shops</h2>
       <form onSubmit={handleCreate} className="shops-create-form">
         <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New shop name" />
-        <button type="submit"><Plus size={16} /> Add shop</button>
+        <button type="submit" className="btn-primary"><Plus size={16} /> Add shop</button>
       </form>
       {error && <p className="shops-error">{error}</p>}
       <ul className="shops-list">
         {shops.map((shop) => (
-          <li key={shop.id}>
+          <li key={shop.id} className="list-row">
             {editingId === shop.id ? (
               <>
                 <input value={editingName} onChange={(e) => setEditingName(e.target.value)} />
-                <button onClick={() => handleRename(shop.id)}>Save</button>
-                <button onClick={() => setEditingId(null)}>Cancel</button>
+                <div className="list-row-actions">
+                  <button className="btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
+                  <button className="btn-primary" onClick={() => handleRename(shop.id)}>Save</button>
+                </div>
               </>
             ) : (
               <>
                 <span>{shop.name}</span>
-                <button onClick={() => { setEditingId(shop.id); setEditingName(shop.name); }}>
-                  <Pencil size={14} />
-                </button>
-                <button onClick={() => deleteShop(db, shop.id)}>
-                  <Trash2 size={14} />
-                </button>
+                <div className="list-row-actions">
+                  <button className="icon-button" aria-label="Edit" onClick={() => { setEditingId(shop.id); setEditingName(shop.name); }}>
+                    <Pencil size={14} />
+                  </button>
+                  <button className="icon-button icon-button-danger" aria-label="Delete" onClick={() => deleteShop(db, shop.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </>
             )}
           </li>

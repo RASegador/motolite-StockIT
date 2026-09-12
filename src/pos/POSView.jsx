@@ -133,7 +133,7 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
         <input placeholder="Amount received" type="number" value={amountReceived}
           onChange={(e) => setAmountReceived(e.target.value)} />
         {error && <p className="pos-error">{error}</p>}
-        <button disabled={cart.length === 0} onClick={handleCheckout}>Checkout</button>
+        <button className="btn-primary pos-checkout-btn" disabled={cart.length === 0} onClick={handleCheckout}>Checkout</button>
       </div>
 
       {completedSale && <Receipt sale={completedSale} onClose={() => setCompletedSale(null)} />}

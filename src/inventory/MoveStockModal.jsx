@@ -32,8 +32,10 @@ export default function MoveStockModal({ item, onClose }) {
         <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} />
         <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
         {error && <p className="modal-error">{error}</p>}
-        <button type="submit">Confirm</button>
-        <button type="button" onClick={onClose}>Cancel</button>
+        <div className="form-actions">
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary">Confirm</button>
+        </div>
       </form>
     </div>
   );

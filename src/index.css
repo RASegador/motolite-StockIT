@@ -46,7 +46,7 @@ th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
 .pos-cart-line-total { font-weight: 600; min-width: 64px; text-align: right; }
 .pos-total { font-size: 18px; font-weight: 700; margin: 8px 0; }
 .pos-cart-card input { padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
-.pos-cart-card button:not(.qty-stepper button) { background: var(--motolite-red); color: #fff; border: none; border-radius: 6px; padding: 10px; font-weight: 600; cursor: pointer; }
+.pos-checkout-btn { width: 100%; height: 44px; font-size: 15px; }
 .pos-cart-card button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pos-error { color: #c1272d; font-size: 13px; margin: 0; }
 
@@ -91,3 +91,51 @@ th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
 .item-detail-stock table { font-size: 13px; }
 .item-detail-total-qty { font-weight: 600; margin-top: 8px; }
 .item-detail-barcode { text-align: center; }
+
+/* Global button system — every button gets a consistent baseline; variant
+   classes (.btn-primary/.btn-secondary/.btn-danger/.btn-link) layer color
+   and weight on top. More specific existing rules (.icon-button,
+   .qty-stepper button, etc.) still win via specificity, not source order. */
+button {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+button:hover { background: #f5f5f5; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary { background: var(--motolite-red); color: #fff; border-color: var(--motolite-red); font-weight: 600; }
+.btn-primary:hover:not(:disabled) { background: #a31f24; border-color: #a31f24; }
+
+.btn-secondary { background: #fff; color: #444; border-color: #ddd; }
+.btn-secondary:hover:not(:disabled) { background: #f0f0f0; }
+
+.btn-danger { background: #fff; color: #c1272d; border-color: #f3b8b8; }
+.btn-danger:hover:not(:disabled) { background: #c1272d; color: #fff; border-color: #c1272d; }
+
+.btn-link { height: auto; padding: 0; border: none; background: none; color: #555; font-size: 13px; text-decoration: underline; }
+.btn-link:hover { background: none; color: var(--motolite-red); }
+
+/* Bottom action row for forms/modals: primary right-most, secondary/danger to its left. */
+.form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 16px; }
+
+/* A single row in a simple list (catalog entries, shop rows, etc.):
+   label on the left, action button(s) in a fixed-alignment group on the right. */
+.list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.list-row:last-child { border-bottom: none; }
+.list-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.list-row > span { flex: 1; min-width: 0; }
+.catalog-section form { display: flex; gap: 8px; margin-bottom: 8px; }
+.catalog-section form input { flex: 1; }

@@ -127,10 +127,10 @@ export default function ItemForm({ item, shopId, onDone }) {
             <input type="number" placeholder="Cost" value={u.cost} onChange={setUnitRow(idx, 'cost')} />
             <input type="number" placeholder="Price" value={u.price} onChange={setUnitRow(idx, 'price')} />
             <input type="number" placeholder="Stock" value={u.stock} onChange={setUnitRow(idx, 'stock')} />
-            <button type="button" onClick={() => removeUnitRow(idx)}>Remove</button>
+            <button type="button" className="btn-danger" onClick={() => removeUnitRow(idx)}>Remove</button>
           </div>
         ))}
-        <button type="button" onClick={addUnitRow}>+ Add unit</button>
+        <button type="button" className="btn-secondary" onClick={addUnitRow}>+ Add unit</button>
       </fieldset>
 
       <fieldset>
@@ -148,7 +148,10 @@ export default function ItemForm({ item, shopId, onDone }) {
       </fieldset>
 
       {error && <p className="item-form-error">{error}</p>}
-      <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save item'}</button>
+      <div className="form-actions">
+        <button type="button" className="btn-secondary" onClick={() => onDone?.()} disabled={saving}>Cancel</button>
+        <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save item'}</button>
+      </div>
     </form>
   );
 }

@@ -53,7 +53,7 @@ export default function TransfersView({ role, shopId, userId }) {
             {shops.filter((s) => s.id !== shopId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <input type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
-          <button type="submit">Ship transfer</button>
+          <button type="submit" className="btn-primary">Ship transfer</button>
         </form>
       )}
       {error && <p className="transfer-error">{error}</p>}
@@ -81,7 +81,7 @@ export default function TransfersView({ role, shopId, userId }) {
                       <input type="number" placeholder="Qty received" style={{ width: 80 }}
                         value={confirmQty[t.id] ?? t.quantity}
                         onChange={(e) => setConfirmQty({ ...confirmQty, [t.id]: e.target.value })} />
-                      <button onClick={() => handleConfirm(t.id)}>Confirm</button>
+                      <button className="btn-primary" onClick={() => handleConfirm(t.id)}>Confirm</button>
                     </>
                   )}
                 </td>

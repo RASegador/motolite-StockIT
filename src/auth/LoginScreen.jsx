@@ -41,7 +41,7 @@ export default function LoginScreen({ onLogin, onResetPassword }) {
         </label>
         {error && <p className="login-error">{error}</p>}
         {resetSent && <p className="login-info">Password reset email sent.</p>}
-        <button type="submit" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in'}</button>
+        <button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign in'}</button>
         <button type="button" className="login-link" onClick={handleReset}>Forgot password?</button>
       </form>
     </div>

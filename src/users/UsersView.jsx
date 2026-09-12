@@ -43,7 +43,7 @@ export default function UsersView() {
             {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
-        <button type="submit"><UserPlus size={16} /> Create user</button>
+        <button type="submit" className="btn-primary"><UserPlus size={16} /> Create user</button>
       </form>
       {createdInfo && <p className="users-created-info">{createdInfo}</p>}
       {error && <p className="users-error">{error}</p>}
@@ -71,7 +71,7 @@ export default function UsersView() {
                 )}
               </td>
               <td>
-                <button onClick={() => setUserActive(u.uid, !u.active)}>
+                <button className={u.active ? 'btn-danger' : 'btn-secondary'} onClick={() => setUserActive(u.uid, !u.active)}>
                   {u.active ? 'Deactivate' : 'Reactivate'}
                 </button>
               </td>
