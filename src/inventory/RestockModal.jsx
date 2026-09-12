@@ -5,7 +5,7 @@ import { createRestock } from './inventoryActions';
 import { db } from '../firebase';
 import Modal from '../shared/Modal';
 
-export default function RestockModal({ item, onClose }) {
+export default function RestockModal({ item, userId, onClose }) {
   const suppliers = useSuppliers();
   const units = getItemUnits(item);
   const [unitName, setUnitName] = useState(units[0]?.name);
@@ -22,6 +22,7 @@ export default function RestockModal({ item, onClose }) {
     try {
       await createRestock(db, {
         itemId: item.id, quantity: Number(quantity), unitName, unitCost: Number(unitCost), supplierId, notes,
+        actorId: userId,
       });
       onClose();
     } catch (err) {

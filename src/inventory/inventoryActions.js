@@ -1,10 +1,10 @@
-import { doc, setDoc, deleteDoc, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, runTransaction } from 'firebase/firestore';
 import { getItemUnits, totalBaseUnits, cascadeDeductUnit, getUnitCounts } from '../lib/units';
 import { computeSellingPrice } from '../lib/pricing';
 import { newId } from '../lib/format';
 import { buildPublicProduct } from '../lib/receipts';
 
-export async function saveItem(db, draft, { shopId: activeShopId }) {
+export async function saveItem(db, draft, { shopId: activeShopId, actorId } = {}) {
   const id = draft.id || newId('i');
   const baseUnitName = draft.baseUnitName || 'Piece';
   // Preserve an existing item's own shopId on edit (the loaded item is
@@ -33,20 +33,46 @@ export async function saveItem(db, draft, { shopId: activeShopId }) {
     reservedForReview: draft.reservedForReview ?? 0,
     units: (draft.units || []).map(({ stock, ...u }) => u),
   };
+  const isNewItem = !(await getDoc(doc(db, 'items', id))).exists();
   await setDoc(doc(db, 'items', id), savedItem);
   // Keep the public, customer-safe mirror (read by the unauthenticated
   // product QR page) in sync with every create/edit — see buildPublicProduct
   // for exactly which fields are considered safe to expose.
   await setDoc(doc(db, 'productPublic', id), buildPublicProduct(savedItem));
+
+  // Feed the Owner Activity Log (src/reports/activityFeed.js) — only "Item
+  // Added" is logged here (not every edit), matching the exact action list
+  // the Owner Activity Log spec calls out.
+  if (isNewItem) {
+    const mvId = newId('m');
+    await setDoc(doc(db, 'movements', mvId), {
+      id: mvId, itemId: id, type: 'in', qty: quantity, shopId,
+      reason: 'Item added', timestamp: Date.now(),
+      activityType: 'item_added', actorId: actorId || null,
+      previousQuantity: 0, newQuantity: quantity,
+    });
+  }
   return id;
 }
 
-export async function deleteItem(db, itemId) {
+export async function deleteItem(db, itemId, { actorId } = {}) {
+  const snap = await getDoc(doc(db, 'items', itemId));
+  const item = snap.exists() ? snap.data() : null;
   await deleteDoc(doc(db, 'items', itemId));
   await deleteDoc(doc(db, 'productPublic', itemId));
+
+  if (item) {
+    const mvId = newId('m');
+    await setDoc(doc(db, 'movements', mvId), {
+      id: mvId, itemId, type: 'out', qty: item.quantity || 0, shopId: item.shopId,
+      reason: 'Item removed', timestamp: Date.now(),
+      activityType: 'item_removed', actorId: actorId || null,
+      previousQuantity: item.quantity || 0, newQuantity: 0,
+    });
+  }
 }
 
-export async function recordMovement(db, itemId, type, qty, reason) {
+export async function recordMovement(db, itemId, type, qty, reason, { actorId } = {}) {
   const mvId = newId('m');
   await runTransaction(db, async (transaction) => {
     const itemRef = doc(db, 'items', itemId);
@@ -73,11 +99,13 @@ export async function recordMovement(db, itemId, type, qty, reason) {
       id: mvId, itemId, type, qty, shopId: item.shopId,
       reason: reason || (type === 'in' ? 'Stock received' : 'Stock issued'),
       timestamp: Date.now(),
+      activityType: 'inventory_adjusted', actorId: actorId || null,
+      previousQuantity: item.quantity, newQuantity: newQty,
     });
   });
 }
 
-export async function createRestock(db, { itemId, quantity, unitName, unitCost, supplierId, notes }) {
+export async function createRestock(db, { itemId, quantity, unitName, unitCost, supplierId, notes, actorId }) {
   const qty = Math.max(0, Number(quantity) || 0);
   if (qty <= 0) throw new Error('Quantity must be greater than zero');
   const restockId = newId('rs');
@@ -101,6 +129,16 @@ export async function createRestock(db, { itemId, quantity, unitName, unitCost, 
       id: restockId, itemId, itemSku: item.sku, shopId: item.shopId,
       quantity: qty, unitName: unit.name, unitCost: cost,
       supplierId: supplierId || null, notes: notes || '', receivedAt: now,
+    });
+    // Mirrored into `movements` too (not just `restocks`) so the Owner
+    // Activity Log has one consistent "Inventory Adjusted" source instead
+    // of needing to merge a fifth collection.
+    const mvId = newId('m');
+    transaction.set(doc(db, 'movements', mvId), {
+      id: mvId, itemId, type: 'in', qty, shopId: item.shopId,
+      reason: notes ? `Restock: ${notes}` : 'Restock', timestamp: now,
+      activityType: 'inventory_adjusted', actorId: actorId || null,
+      previousQuantity: item.quantity, newQuantity: newQuantity,
     });
   });
 }

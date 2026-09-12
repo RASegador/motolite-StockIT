@@ -2,12 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { can, resolveRole } from './permissions';
 
 describe('can', () => {
-  it('gives owner full access, including cross-shop reports and user management', () => {
+  it('gives owner full access, including cross-shop reports and user management, but never POS', () => {
     expect(can('owner', 'editInventory')).toBe(true);
-    expect(can('owner', 'pos')).toBe(true);
+    // The Owner is the central administrator/monitoring account for the
+    // whole system, never a POS user — POS is exclusively for Manager and
+    // Cashier. See src/lib/permissions.js's comment on `owner.pos`.
+    expect(can('owner', 'pos')).toBe(false);
     expect(can('owner', 'cancelSales')).toBe(true);
     expect(can('owner', 'manageUsers')).toBe(true);
     expect(can('owner', 'viewConsolidatedReports')).toBe(true);
+    expect(can('owner', 'viewActivityLog')).toBe(true);
   });
 
   it('gives manager full inventory/transfer/report control but no POS', () => {
@@ -17,6 +21,7 @@ describe('can', () => {
     expect(can('manager', 'viewReports')).toBe(true);
     expect(can('manager', 'pos')).toBe(false);
     expect(can('manager', 'manageUsers')).toBe(false);
+    expect(can('manager', 'viewActivityLog')).toBe(false);
   });
 
   it('gives cashier POS, read-only inventory, and stock receive/issue, nothing else', () => {

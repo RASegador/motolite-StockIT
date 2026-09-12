@@ -129,9 +129,12 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
       const factor = resolvedUnit ? resolvedUnit.factor : 1;
       const mvId = newId('m');
       const baseQty = line.qty * factor;
+      const { newQuantity } = finalStockByItem[line.itemId] || {};
       transaction.set(doc(db, 'movements', mvId), {
         id: mvId, itemId: line.itemId, type: 'out', qty: baseQty, shopId,
         reason: `Sale ${receiptNo}`, timestamp: now,
+        activityType: 'item_sold', actorId: cashierId || null,
+        previousQuantity: item.quantity, newQuantity: newQuantity ?? null,
       });
     });
     transaction.set(doc(db, 'sales', sale.id), sale);
@@ -140,7 +143,7 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
   });
 }
 
-export async function cancelSale(db, sale) {
+export async function cancelSale(db, sale, { actorId } = {}) {
   if (sale.cancelled) throw new Error('This sale is already cancelled');
   const now = Date.now();
   const itemIds = [...new Set(sale.items.map((l) => l.itemId))];
@@ -183,9 +186,12 @@ export async function cancelSale(db, sale) {
       const factor = resolvedUnit ? resolvedUnit.factor : (line.factor ?? 1);
       const mvId = newId('m');
       const baseQty = line.qty * factor;
+      const { newQuantity } = restoredByItem[line.itemId] || {};
       transaction.set(doc(db, 'movements', mvId), {
         id: mvId, itemId: line.itemId, type: 'in', qty: baseQty, shopId: sale.shopId,
         reason: `Sale ${sale.receiptNo} cancelled`, timestamp: now,
+        activityType: 'sale_cancelled', actorId: actorId || null,
+        previousQuantity: item ? item.quantity : null, newQuantity: newQuantity ?? null,
       });
     });
     transaction.set(doc(db, 'sales', sale.id), { cancelled: true, cancelledAt: now }, { merge: true });
@@ -277,7 +283,12 @@ export async function refundSaleItems(db, sale, refundLines, { refundedBy, reaso
 
     // Restock each affected item — same "cascade back into unitStock"
     // shape cancelSale uses, just for the specific line quantities being
-    // returned rather than the whole sale.
+    // returned rather than the whole sale. Also records each item's
+    // resulting base-unit quantity, so the movement entry logged below can
+    // report the real previous/new quantity rather than re-deriving it
+    // (re-summing raw per-unit deltas would ignore unit factors and be
+    // wrong for a multi-unit refund).
+    const newQuantityByItem = {};
     Object.entries(stockDelta).forEach(([itemId, deltas]) => {
       const item = freshItems[itemId];
       if (!item) return; // item was deleted since — refund is still recorded, stock just can't be restored
@@ -287,6 +298,7 @@ export async function refundSaleItems(db, sale, refundLines, { refundedBy, reaso
         newStock = { ...newStock, [unitName]: (newStock[unitName] || 0) + qty };
       });
       const newQuantity = totalBaseUnits(newStock, units);
+      newQuantityByItem[itemId] = newQuantity;
       transaction.set(doc(db, 'items', itemId), { ...item, quantity: newQuantity, unitStock: newStock });
     });
 
@@ -296,9 +308,13 @@ export async function refundSaleItems(db, sale, refundLines, { refundedBy, reaso
     Object.entries(stockDelta).forEach(([itemId, deltas]) => {
       const totalQty = Object.values(deltas).reduce((s, q) => s + q, 0);
       const mvId = newId('m');
+      const priorItem = freshItems[itemId];
       transaction.set(doc(db, 'movements', mvId), {
         id: mvId, itemId, type: 'in', qty: totalQty, shopId: saleData.shopId,
         reason: `Refund ${saleData.receiptNo}`, timestamp: now,
+        activityType: 'item_returned', actorId: refundedBy || null,
+        previousQuantity: priorItem ? priorItem.quantity : null,
+        newQuantity: newQuantityByItem[itemId] ?? null,
       });
     });
 

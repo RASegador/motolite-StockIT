@@ -70,7 +70,7 @@ function Section({ title, children }) {
   );
 }
 
-export default function ItemForm({ item, shopId, role, onDone }) {
+export default function ItemForm({ item, shopId, role, userId, onDone }) {
   const categories = useCategories();
   const locations = useLocations();
   const suppliers = useSuppliers();
@@ -125,7 +125,7 @@ export default function ItemForm({ item, shopId, role, onDone }) {
     }
     setSaving(true);
     try {
-      await saveItem(db, draft, { shopId: draft.shopId });
+      await saveItem(db, draft, { shopId: draft.shopId, actorId: userId });
       onDone?.();
     } catch (err) {
       setError(err.message);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   LayoutGrid, Boxes, ShoppingCart, AlertTriangle, Truck, Store, ShieldCheck, Tag, Receipt, LogOut,
-  ChevronDown, Menu, X,
+  ChevronDown, Menu, X, ClipboardList,
 } from 'lucide-react';
 import { can } from '../lib/permissions';
 import Tooltip from './Tooltip';
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { key: 'sales', label: 'Sales History', icon: Receipt, anyPermission: ['viewOwnSales', 'viewSalesReports'] },
   { key: 'shops', label: 'Shops', icon: Store, permission: 'manageShops' },
   { key: 'users', label: 'Users', icon: ShieldCheck, permission: 'manageUsers' },
+  { key: 'activityLog', label: 'Activity Log', icon: ClipboardList, permission: 'viewActivityLog' },
 ];
 
 // Items kept inline at tablet width — everything else moves into "More".

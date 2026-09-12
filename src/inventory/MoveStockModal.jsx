@@ -3,7 +3,7 @@ import { recordMovement } from './inventoryActions';
 import { db } from '../firebase';
 import Modal from '../shared/Modal';
 
-export default function MoveStockModal({ item, onClose }) {
+export default function MoveStockModal({ item, userId, onClose }) {
   const [type, setType] = useState('in');
   const [qty, setQty] = useState(1);
   const [reason, setReason] = useState('');
@@ -14,7 +14,7 @@ export default function MoveStockModal({ item, onClose }) {
     e.preventDefault();
     setError('');
     try {
-      await recordMovement(db, item.id, type, Number(qty), reason);
+      await recordMovement(db, item.id, type, Number(qty), reason, { actorId: userId });
       onClose();
     } catch (err) {
       setError(err.message);

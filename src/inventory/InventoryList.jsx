@@ -28,7 +28,7 @@ const SORT_OPTIONS = [
   { value: 'qty-desc', label: 'Quantity (high–low)' },
 ];
 
-export default function InventoryList({ role, shopId }) {
+export default function InventoryList({ role, shopId, userId }) {
   const items = useItems({ role, shopId });
   const categories = useCategories();
   const [search, setSearch] = useState('');
@@ -134,7 +134,7 @@ export default function InventoryList({ role, shopId }) {
                       )}
                       {can(role, 'deleteInventory') && (
                         <Tooltip label="Delete this item">
-                          <button className="icon-button icon-button-danger" onClick={() => deleteItem(db, it.id)} aria-label="Delete"><Trash2 size={14} /></button>
+                          <button className="icon-button icon-button-danger" onClick={() => deleteItem(db, it.id, { actorId: userId })} aria-label="Delete"><Trash2 size={14} /></button>
                         </Tooltip>
                       )}
                     </div>
@@ -149,11 +149,11 @@ export default function InventoryList({ role, shopId }) {
         </table>
       </div>
 
-      {showNewForm && <ItemForm shopId={shopId} role={role} onDone={() => setShowNewForm(false)} />}
-      {editingItem && <ItemForm item={editingItem} shopId={shopId} role={role} onDone={() => setEditingItem(null)} />}
+      {showNewForm && <ItemForm shopId={shopId} role={role} userId={userId} onDone={() => setShowNewForm(false)} />}
+      {editingItem && <ItemForm item={editingItem} shopId={shopId} role={role} userId={userId} onDone={() => setEditingItem(null)} />}
       {viewingItem && <ItemDetailView item={viewingItem} onClose={() => setViewingItem(null)} />}
-      {movingItem && <MoveStockModal item={movingItem} onClose={() => setMovingItem(null)} />}
-      {restockingItem && <RestockModal item={restockingItem} onClose={() => setRestockingItem(null)} />}
+      {movingItem && <MoveStockModal item={movingItem} userId={userId} onClose={() => setMovingItem(null)} />}
+      {restockingItem && <RestockModal item={restockingItem} userId={userId} onClose={() => setRestockingItem(null)} />}
     </div>
   );
 }

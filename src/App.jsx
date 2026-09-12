@@ -12,6 +12,7 @@ import ShopsView from './shops/ShopsView';
 import UsersView from './users/UsersView';
 import CatalogManager from './catalog/CatalogManager';
 import OwnerDashboard from './reports/OwnerDashboard';
+import OwnerActivityLog from './reports/OwnerActivityLog';
 import ShopReports from './reports/ShopReports';
 import SalesHistory from './reports/SalesHistory';
 import { useShops } from './shops/useShops';
@@ -126,7 +127,7 @@ export default function App() {
           ? requireOwnerShop(<POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={profile.fullName || user.email} />)
           : defaultView();
       case 'inventory':
-        return can(role, 'viewInventory') ? <InventoryList role={role} shopId={writeShopId} /> : defaultView();
+        return can(role, 'viewInventory') ? <InventoryList role={role} shopId={writeShopId} userId={user.uid} /> : defaultView();
       case 'catalog':
         return can(role, 'manageCategories') ? <CatalogManager /> : defaultView();
       case 'damage':
@@ -145,6 +146,8 @@ export default function App() {
         return can(role, 'manageShops') ? <ShopsView /> : defaultView();
       case 'users':
         return can(role, 'manageUsers') ? <UsersView currentUid={user.uid} /> : defaultView();
+      case 'activityLog':
+        return can(role, 'viewActivityLog') ? <OwnerActivityLog /> : defaultView();
       case 'overview':
       default:
         return defaultView();

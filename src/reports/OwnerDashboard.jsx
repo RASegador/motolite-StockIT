@@ -3,9 +3,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useItems } from '../inventory/useItems';
 import { useSales } from './useSales';
 import { useMovementsLog } from './useMovementsLog';
+import { useDamageReports } from '../damage/useDamageReports';
+import { useTransfers } from '../transfers/useTransfers';
 import { useShops } from '../shops/useShops';
 import { useUsers } from '../users/useUsers';
 import { computeShopComparisonStats, filterSalesForChart, groupSalesByDate } from './dashboardStats';
+import { buildActivityFeed, activityLabel } from './activityFeed';
 import { exportSalesReportPdf, exportInventoryReportPdf } from './pdfExport';
 import { currency } from '../lib/format';
 
@@ -13,10 +16,31 @@ export default function OwnerDashboard() {
   const items = useItems({ role: 'owner' });
   const sales = useSales({ role: 'owner' });
   const movements = useMovementsLog({ role: 'owner' });
+  const damageReports = useDamageReports({ role: 'owner' });
+  const transfers = useTransfers({ role: 'owner' });
   const shops = useShops();
   const users = useUsers();
 
   const { perShop, totals } = computeShopComparisonStats(items, sales, shops);
+
+  const pendingDamageCount = damageReports.filter((r) => r.status === 'pending').length;
+  const inTransitTransferCount = transfers.filter((t) => t.status === 'in_transit').length;
+  const returnedCount = damageReports.filter((r) => r.reason === 'returned').length;
+
+  const activity = useMemo(
+    () => buildActivityFeed({ movements, damageReports, transfers }).slice(0, 20),
+    [movements, damageReports, transfers]
+  );
+  const userById = useMemo(() => new Map(users.map((u) => [u.uid, u])), [users]);
+  const shopById = useMemo(() => new Map(shops.map((s) => [s.id, s])), [shops]);
+  function userLabel(uid) {
+    if (!uid) return '—';
+    const u = userById.get(uid);
+    return u ? (u.fullName || u.username || uid) : uid;
+  }
+  function shopLabel(id) {
+    return id ? (shopById.get(id)?.name || id) : '—';
+  }
 
   // Sales chart filters — 'all' shops is the default, dates start unset
   // (no bound). Both combine, and the chart re-derives on every change with
@@ -42,6 +66,9 @@ export default function OwnerDashboard() {
         <div className="stat-tile"><span>Out of stock</span><strong>{totals.outOfStockCount}</strong></div>
         <div className="stat-tile"><span>Revenue</span><strong>{currency(totals.revenue)}</strong></div>
         <div className="stat-tile"><span>Profit</span><strong>{currency(totals.profit)}</strong></div>
+        <div className="stat-tile"><span>Pending damage reports</span><strong>{pendingDamageCount}</strong></div>
+        <div className="stat-tile"><span>Returned items (all-time)</span><strong>{returnedCount}</strong></div>
+        <div className="stat-tile"><span>Transfers in transit</span><strong>{inTransitTransferCount}</strong></div>
       </div>
 
       <h3>Sales</h3>
@@ -112,11 +139,20 @@ export default function OwnerDashboard() {
         </tbody>
       </table>
 
-      <h3>Activity log</h3>
+      <h3>Recent activity</h3>
+      <p className="dashboard-activity-hint">
+        Every inventory, sales, damage/return, and transfer action across all shops — see the Activity Log
+        (top navigation) for the full, filterable history.
+      </p>
       <ul className="dashboard-activity-log">
-        {movements.map((m) => (
-          <li key={m.id}>{new Date(m.timestamp).toLocaleString()} — {m.type === 'in' ? 'Received' : 'Issued'} {m.qty} × {m.itemId} ({m.reason})</li>
+        {activity.map((e) => (
+          <li key={e.id}>
+            {new Date(e.timestamp).toLocaleString()} — <strong>{activityLabel(e.type)}</strong>
+            {' '}by {userLabel(e.userId)} at {shopLabel(e.shopIds[0])}
+            {e.quantity != null && <> ({e.quantity} unit{e.quantity === 1 ? '' : 's'})</>}
+          </li>
         ))}
+        {activity.length === 0 && <li className="dashboard-activity-empty">No activity recorded yet.</li>}
       </ul>
     </div>
   );

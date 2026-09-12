@@ -465,4 +465,36 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .public-receipt-table { width: 100%; margin: 16px 0; text-align: left; }
 .public-receipt-table td { padding: 6px 0; border-bottom: 1px dashed #eee; font-size: 13px; }
 .public-receipt-table td:last-child { text-align: right; }
+
+/* Owner Dashboard's "Recent activity" list and the full Owner Activity Log
+   view (src/reports/OwnerActivityLog.jsx) — reuses the same card/table
+   language as the Inventory list and dashboard filter row above. */
+.dashboard-activity-hint { font-size: 12px; color: #888; margin: 0 0 10px; }
+.dashboard-activity-log { list-style: none; margin: 0; padding: 0; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.dashboard-activity-log li { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #444; }
+.dashboard-activity-log li:last-child { border-bottom: none; }
+.dashboard-activity-empty { color: #888; text-align: center; }
+
+.activity-log-view h2 { display: flex; align-items: center; gap: 8px; }
+.activity-log-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin: 12px 0 16px; }
+.activity-log-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #666; }
+.activity-log-filters select, .activity-log-filters input[type="date"] {
+  padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: #fff; color: #333;
+}
+.activity-log-filters .btn-link { align-self: flex-end; height: 38px; }
+.activity-log-table-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-x: auto; }
+.activity-log-table { width: 100%; border-collapse: collapse; }
+.activity-log-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: #888; padding: 12px; border-bottom: 1px solid #eee; white-space: nowrap; }
+.activity-log-table td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; font-size: 13px; white-space: nowrap; }
+.activity-log-table tbody tr:hover { background: #fafafa; }
+.activity-log-empty { text-align: center; color: #888; padding: 24px; white-space: normal; }
+.activity-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.02em; background: #f0f0f0; color: #555;
+}
+.activity-badge.activity-item_added, .activity-badge.activity-item_sold { background: #e3f7e8; color: #1c7a34; }
+.activity-badge.activity-item_removed, .activity-badge.activity-sale_cancelled { background: #fde3e3; color: #c1272d; }
+.activity-badge.activity-item_damaged, .activity-badge.activity-item_returned { background: #fff3cd; color: #93720b; }
+.activity-badge.activity-item_transferred { background: #e3ecfd; color: #1c4b9c; }
+.activity-badge.activity-inventory_adjusted { background: #eee7fb; color: #5b3ea6; }
 .public-page-loading, .public-page-error { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #666; text-align: center; padding: 24px; }

@@ -29,7 +29,7 @@ export default function SalesHistory({ role, shopId, userId }) {
   async function handleCancel(sale) {
     setError('');
     try {
-      await cancelSale(db, sale);
+      await cancelSale(db, sale, { actorId: userId });
     } catch (err) {
       setError(err.message);
     }

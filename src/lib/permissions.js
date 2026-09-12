@@ -7,11 +7,18 @@ export const PERMISSIONS = {
     viewInventory: true, editInventory: true, deleteInventory: true,
     manageCategories: true, manageSuppliers: true, manageLocations: true,
     stockReceive: true, stockIssue: true, editMarkup: true,
-    pos: true, viewReports: true, viewSalesReports: true, print: true, cancelSales: true,
+    // The Owner is the central administrator/monitoring account for the
+    // whole system — never a POS user. This is intentionally `false`
+    // (not a config toggle): App.jsx's `case 'pos':` guard and Topbar's
+    // nav-item filter both key off this single value, so flipping it here
+    // is enough to remove POS from the Owner's navigation AND block direct
+    // navigation to it, with no other code changes required.
+    pos: false,
+    viewReports: true, viewSalesReports: true, print: true, cancelSales: true,
     initiateTransfer: true, confirmTransfer: true,
     reportDamage: true, approveDamage: true,
     manageUsers: true, manageShops: true, viewOwnSales: true,
-    viewConsolidatedReports: true,
+    viewConsolidatedReports: true, viewActivityLog: true,
   },
   manager: {
     viewInventory: true, editInventory: true, deleteInventory: true,
@@ -21,7 +28,7 @@ export const PERMISSIONS = {
     initiateTransfer: true, confirmTransfer: true,
     reportDamage: true, approveDamage: true,
     manageUsers: false, manageShops: false, viewOwnSales: false,
-    viewConsolidatedReports: false,
+    viewConsolidatedReports: false, viewActivityLog: false,
   },
   cashier: {
     viewInventory: true, editInventory: false, deleteInventory: false,
@@ -31,7 +38,7 @@ export const PERMISSIONS = {
     initiateTransfer: false, confirmTransfer: false,
     reportDamage: true, approveDamage: false,
     manageUsers: false, manageShops: false, viewOwnSales: true,
-    viewConsolidatedReports: false,
+    viewConsolidatedReports: false, viewActivityLog: false,
   },
 };
 
