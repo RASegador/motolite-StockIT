@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './auth/useAuth';
 import LoginScreen from './auth/LoginScreen';
+import ChangePasswordScreen from './auth/ChangePasswordScreen';
+import { completeFirstLogin } from './users/userActions';
 import Sidebar from './shared/Sidebar';
 import InventoryList from './inventory/InventoryList';
 import POSView from './pos/POSView';
@@ -54,6 +56,9 @@ export default function App() {
       </div>
     );
   }
+  if (profile.mustChangePassword) {
+    return <ChangePasswordScreen onSubmit={completeFirstLogin} onLogout={logout} />;
+  }
 
   const shopId = profile.shopId;
   const shopName = shops.find((s) => s.id === shopId)?.name || '';
@@ -63,12 +68,18 @@ export default function App() {
   // `shopId`/`profile.shopId` unchanged.
   const writeShopId = role === 'owner' ? ownerActiveShopId : shopId;
 
+  // POSView/Receipt use `cashierEmail` to print who rang up a sale up —
+  // named for what it held before accounts had real emails. Manager/
+  // Cashier accounts now sign in with a Username backed by a synthetic,
+  // never-shown email (see src/lib/credentials.js), so their Firestore
+  // profile's fullName is what actually belongs on a printed receipt;
+  // user.email only remains as a fallback for the original Owner account.
   function defaultView() {
     if (role === 'owner') return <OwnerDashboard />;
     if (can(role, 'viewReports')) return <ShopReports shopId={shopId} shopName={shopName} />;
     // Cashier has neither viewReports nor a shop-reports screen of their
     // own — land them on POS instead of a screen they can't see.
-    return <POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={user.email} />;
+    return <POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={profile.fullName || user.email} />;
   }
 
   function OwnerShopPicker() {
@@ -112,7 +123,7 @@ export default function App() {
     switch (view) {
       case 'pos':
         return can(role, 'pos')
-          ? requireOwnerShop(<POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={user.email} />)
+          ? requireOwnerShop(<POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={profile.fullName || user.email} />)
           : defaultView();
       case 'inventory':
         return can(role, 'viewInventory') ? <InventoryList role={role} shopId={writeShopId} /> : defaultView();
@@ -133,7 +144,7 @@ export default function App() {
       case 'shops':
         return can(role, 'manageShops') ? <ShopsView /> : defaultView();
       case 'users':
-        return can(role, 'manageUsers') ? <UsersView /> : defaultView();
+        return can(role, 'manageUsers') ? <UsersView currentUid={user.uid} /> : defaultView();
       case 'overview':
       default:
         return defaultView();

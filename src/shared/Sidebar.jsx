@@ -1,5 +1,8 @@
-import { LayoutGrid, Boxes, ShoppingCart, AlertTriangle, Truck, Store, ShieldCheck, Tag, Receipt, LogOut } from 'lucide-react';
+import {
+  LayoutGrid, Boxes, ShoppingCart, AlertTriangle, Truck, Store, ShieldCheck, Tag, Receipt, LogOut,
+} from 'lucide-react';
 import { can } from '../lib/permissions';
+import Tooltip from './Tooltip';
 
 const NAV_ITEMS = [
   { key: 'overview', label: 'Overview', icon: LayoutGrid, permission: null },
@@ -23,7 +26,10 @@ export default function Sidebar({ view, setView, role, fullName, onLogout }) {
   return (
     <nav className="sidebar">
       <img src="/branding/motolite-logo.png" alt="Motolite" className="sidebar-logo" />
-      <p className="sidebar-user">{fullName} ({role})</p>
+      <p className="sidebar-user">
+        <span className="sidebar-user-name">{fullName}</span>
+        <span className="sidebar-user-role">{role}</span>
+      </p>
       <ul>
         {NAV_ITEMS.filter((item) => {
           if (item.permission === null) return true;
@@ -31,11 +37,18 @@ export default function Sidebar({ view, setView, role, fullName, onLogout }) {
           return can(role, item.permission);
         }).map((item) => (
           <li key={item.key} className={view === item.key ? 'active' : ''} onClick={() => setView(item.key)}>
-            <item.icon size={16} /> {item.label}
+            <Tooltip label={item.label} className="sidebar-nav-item">
+              <item.icon size={18} className="sidebar-nav-icon" />
+              <span className="sidebar-nav-label">{item.label}</span>
+            </Tooltip>
           </li>
         ))}
       </ul>
-      <button className="sidebar-logout" onClick={onLogout}><LogOut size={16} /> Sign out</button>
+      <Tooltip label="Sign out" className="sidebar-logout-wrap">
+        <button className="sidebar-logout" onClick={onLogout}>
+          <LogOut size={18} className="sidebar-nav-icon" /> <span className="sidebar-nav-label">Sign out</span>
+        </button>
+      </Tooltip>
     </nav>
   );
 }

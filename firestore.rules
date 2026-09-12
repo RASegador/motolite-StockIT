@@ -52,12 +52,34 @@ service cloud.firestore {
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
+    // There is exactly one Owner account in this system (created once,
+    // out-of-band, by scripts/create-owner.js) — this blocks any write
+    // through the app from ever creating or promoting a second one, even
+    // though isOwner() itself is otherwise allowed to write any `users`
+    // doc. It only fires when `role` is actually part of the write, so an
+    // Owner's own untouched `role: 'owner'` on their own doc never trips it.
+    function roleWriteOk() {
+      return !('role' in request.resource.data.diff(resource.data).affectedKeys()) ||
+        request.resource.data.role != 'owner';
+    }
 
     match /users/{uid} {
       allow read: if isSignedIn() && (isOwner() || request.auth.uid == uid);
-      allow create: if isOwner();
-      allow update: if isOwner() ||
-        (request.auth.uid == uid && onlyChanged(['fullName', 'phone']));
+      allow create: if isOwner() && request.resource.data.role != 'owner';
+      allow update: if (isOwner() && roleWriteOk()) ||
+        (request.auth.uid == uid && onlyChanged(['fullName', 'phone'])) ||
+        // First-login gate: the signed-in user may only ever flip this
+        // true -> false on their own doc (never re-lock it, never touch
+        // anyone else's).
+        (request.auth.uid == uid && onlyChanged(['mustChangePassword']) &&
+          resource.data.get('mustChangePassword', false) == true &&
+          request.resource.data.mustChangePassword == false) ||
+        // One-time self-serve Username set, for an account created before
+        // Usernames existed (the original Owner account) — only usable
+        // while the doc has no Username yet.
+        (request.auth.uid == uid && onlyChanged(['username']) &&
+          resource.data.get('username', null) == null &&
+          request.resource.data.username is string && request.resource.data.username.size() > 0);
       allow delete: if isOwner();
     }
 
