@@ -3,7 +3,7 @@
   font-family: 'Segoe UI', Arial, sans-serif;
 }
 body { margin: 0; background: #f5f5f5; }
-.app-shell { display: flex; min-height: 100vh; }
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
 
 /* Icon-button tooltips (src/shared/Tooltip.jsx). The bubble is portaled to
    <body> and positioned with `position: fixed` from the trigger's own
@@ -26,66 +26,121 @@ body { margin: 0; background: #f5f5f5; }
   content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
   border: 5px solid transparent; border-top-color: #1c1c1c;
 }
-/* Sidebar nav — every item is icon + label laid out identically (see
-   Sidebar.jsx: each <li> wraps its icon/label in the same Tooltip, so the
-   label is always available on hover/long-press even where space is
-   tight). box-sizing: border-box keeps the fixed-width column from ever
-   letting an item's own padding push content past the sidebar's edge. */
-.sidebar {
-  width: 220px; flex-shrink: 0; box-sizing: border-box;
-  background: #1c1c1c; color: #fff; padding: 20px 14px; display: flex; flex-direction: column; gap: 4px;
+/* Topbar nav (replaces the old left sidebar). `position: sticky` — not
+   `fixed` — keeps it in normal document flow, so .app-main below it never
+   needs a manual offset/padding hack to avoid sitting underneath it: the
+   browser already reserves the topbar's own height as space above the
+   content. z-index keeps it above table headers, modals stay above it via
+   their own higher z-index (30/1000). */
+.topbar {
+  position: sticky; top: 0; z-index: 50; box-sizing: border-box;
+  display: flex; align-items: center; gap: 20px;
+  height: 60px; padding: 0 20px; background: #1c1c1c; color: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
-.sidebar-logo { width: 64px; height: 64px; border-radius: 50%; align-self: center; margin-bottom: 4px; }
-.sidebar-user {
-  margin: 0 0 16px; padding: 0 6px; display: flex; flex-direction: column; gap: 2px;
-  overflow-wrap: anywhere;
-}
-.sidebar-user-name { font-size: 13px; font-weight: 600; color: #fff; }
-.sidebar-user-role {
-  align-self: flex-start; font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.05em; color: #ccc; background: rgba(255,255,255,0.12);
-  border-radius: 999px; padding: 2px 8px;
-}
-.sidebar ul { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.sidebar li {
-  border-radius: 6px; cursor: pointer; box-sizing: border-box;
-  transition: background-color 0.12s ease;
-}
-.sidebar li:hover { background: rgba(255,255,255,0.1); }
-.sidebar li.active { background: var(--motolite-red); }
-.sidebar li.active:hover { background: var(--motolite-red); }
-/* The Tooltip wrapper span becomes the item's actual clickable row — full
-   width, icon and label on one baseline, generous but even padding on
-   every side so text never touches the sidebar's own edge or another
-   item. */
-.sidebar .tooltip-wrap.sidebar-nav-item {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 10px 12px; box-sizing: border-box;
-}
-.sidebar-nav-icon { flex-shrink: 0; }
-.sidebar-nav-label {
-  font-size: 13.5px; line-height: 1.3; overflow-wrap: anywhere; min-width: 0;
-}
-.sidebar-logout {
-  width: 100%; box-sizing: border-box; margin-top: 12px; padding: 10px 12px;
-  display: flex; align-items: center; gap: 12px; border: none; border-radius: 6px;
-  background: transparent; color: #fff; font-size: 13.5px; cursor: pointer;
-  transition: background-color 0.12s ease;
-}
-.sidebar-logout:hover { background: rgba(255,255,255,0.1); }
-.sidebar .tooltip-wrap.sidebar-logout-wrap { display: block; width: 100%; }
+.topbar-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.topbar-logo { width: 34px; height: 34px; border-radius: 50%; }
+.topbar-title { font-size: 15px; font-weight: 700; white-space: nowrap; }
 
-/* Below this width the sidebar auto-collapses to an icon-only rail rather
-   than shrinking text until it's unreadable or wrapping until items get
-   tall and uneven — every item's full label is still reachable via its
-   Tooltip (hover, or long-press on touch). */
-@media (max-width: 860px) {
-  .sidebar { width: 64px; padding: 16px 8px; align-items: center; }
-  .sidebar-logo { width: 40px; height: 40px; }
-  .sidebar-user, .sidebar-nav-label { display: none; }
-  .sidebar .tooltip-wrap.sidebar-nav-item { justify-content: center; padding: 12px 8px; }
-  .sidebar-logout { justify-content: center; padding: 12px 8px; }
+.topbar-nav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow: hidden; }
+.topbar-nav-tablet { display: none; }
+
+/* Every item: icon + label side by side, generous even padding on all
+   sides so text never touches another item or the topbar's own edge, and
+   a rounded hit-area that gets a smooth hover tint and a solid highlight
+   when it's the active page. */
+.topbar-nav-item {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 8px 12px; border: none; border-radius: 6px; box-sizing: border-box;
+  background: transparent; color: #ddd; font-size: 13.5px; font-weight: 500;
+  cursor: pointer; white-space: nowrap; transition: background-color 0.15s ease, color 0.15s ease;
 }
+.topbar-nav-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.topbar-nav-item.active { background: var(--motolite-red); color: #fff; }
+.topbar-nav-icon { flex-shrink: 0; }
+
+.topbar-more { position: relative; flex-shrink: 0; }
+.topbar-more-chevron { transition: transform 0.15s ease; }
+.topbar-more-chevron.open { transform: rotate(180deg); }
+.topbar-more-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  background: #fff; color: #222; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+  padding: 6px; min-width: 220px; display: flex; flex-direction: column; gap: 2px;
+}
+.topbar-more-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: none;
+  border-radius: 6px; background: transparent; color: #333; font-size: 13.5px;
+  text-align: left; cursor: pointer; white-space: nowrap;
+}
+.topbar-more-item:hover { background: #f2f2f2; }
+.topbar-more-item.active { background: var(--motolite-red); color: #fff; }
+
+.topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
+.topbar-user { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.topbar-user-name { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.topbar-user-role {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: #ccc; background: rgba(255,255,255,0.14); border-radius: 999px; padding: 2px 8px;
+}
+.topbar-logout {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: none;
+  border-radius: 6px; background: transparent; color: #ddd; font-size: 13.5px;
+  cursor: pointer; white-space: nowrap; transition: background-color 0.15s ease, color 0.15s ease;
+}
+.topbar-logout:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+.topbar-hamburger {
+  display: none; align-items: center; justify-content: center; width: 36px; height: 36px;
+  border: none; border-radius: 6px; background: transparent; color: #fff; cursor: pointer;
+}
+.topbar-hamburger:hover { background: rgba(255,255,255,0.1); }
+
+.topbar-mobile-panel {
+  display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 55;
+  background: #1c1c1c; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  flex-direction: column; gap: 2px; max-height: calc(100vh - 60px); overflow-y: auto; box-sizing: border-box;
+}
+.topbar-mobile-user {
+  margin: 4px 8px 8px; display: flex; align-items: center; gap: 8px;
+  color: #fff; font-size: 13px; font-weight: 600;
+}
+.topbar-mobile-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px; border: none;
+  border-radius: 6px; background: transparent; color: #ddd; font-size: 14px;
+  text-align: left; cursor: pointer; width: 100%; box-sizing: border-box;
+}
+.topbar-mobile-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.topbar-mobile-item.active { background: var(--motolite-red); color: #fff; }
+.topbar-mobile-logout { border-top: 1px solid rgba(255,255,255,0.14); margin-top: 4px; padding-top: 14px; }
+
+/* Tablet: only the most-used items stay inline (with tighter gaps to fit),
+   everything else moves into the More dropdown instead of cramming or
+   wrapping. Also drop to icon-only "Sign out" and hide the name/role text
+   to give the nav row more room. */
+@media (max-width: 1100px) {
+  .topbar { gap: 10px; padding: 0 14px; }
+  .topbar-nav-full { display: none; }
+  .topbar-nav-tablet { display: flex; }
+  .topbar-nav-item { padding: 8px 10px; }
+  .topbar-user { display: none; }
+  .topbar-logout-label { display: none; }
+}
+
+/* Mobile: the whole nav collapses behind a hamburger; brand + hamburger
+   only in the bar itself, full item list (with labels) in the dropdown
+   panel so nothing is ever icon-only-and-unlabeled. The panel is only ever
+   in the DOM while open (React), but it's still gated behind this media
+   query too — otherwise leaving it open and resizing back up to desktop
+   width would leave a stray flex panel floating under the topbar. */
+@media (max-width: 700px) {
+  .topbar { padding: 0 12px; position: relative; }
+  .topbar-nav-full, .topbar-nav-tablet { display: none; }
+  .topbar-title { display: none; }
+  .topbar-logout { display: none; }
+  .topbar-hamburger { display: flex; }
+  .topbar-mobile-panel { display: flex; }
+}
+
 .app-main { flex: 1; padding: 24px; overflow-x: auto; }
 .login-screen { max-width: 360px; margin: 80px auto; text-align: center; }
 .login-logo { width: 96px; height: 96px; border-radius: 50%; }

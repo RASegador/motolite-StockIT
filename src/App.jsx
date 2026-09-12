@@ -3,7 +3,7 @@ import { useAuth } from './auth/useAuth';
 import LoginScreen from './auth/LoginScreen';
 import ChangePasswordScreen from './auth/ChangePasswordScreen';
 import { completeFirstLogin } from './users/userActions';
-import Sidebar from './shared/Sidebar';
+import Topbar from './shared/Topbar';
 import InventoryList from './inventory/InventoryList';
 import POSView from './pos/POSView';
 import DamageReportsView from './damage/DamageReportsView';
@@ -153,7 +153,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar view={view} setView={setView} role={role} fullName={profile.fullName} onLogout={logout} />
+      <Topbar view={view} setView={setView} role={role} fullName={profile.fullName} onLogout={logout} />
       <main className="app-main">
         <OwnerShopPicker />
         {renderView()}
