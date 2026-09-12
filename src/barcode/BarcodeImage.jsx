@@ -1,17 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
 
-export default function BarcodeImage({ value, height = 50 }) {
-  const svgRef = useRef(null);
+// Renders to a <canvas> (not <svg>) specifically so ProductCodes can call
+// canvas.toDataURL('image/png') to download it — SVG would need an extra
+// serialize-and-rasterize step for the same result.
+const BarcodeImage = forwardRef(function BarcodeImage({ value, height = 50 }, ref) {
+  const canvasRef = useRef(null);
+  useImperativeHandle(ref, () => canvasRef.current, []);
 
   useEffect(() => {
-    if (!value || !svgRef.current) return;
+    if (!value || !canvasRef.current) return;
     try {
-      JsBarcode(svgRef.current, value, { format: 'CODE128', height, displayValue: true });
+      JsBarcode(canvasRef.current, value, { format: 'CODE128', height, displayValue: true });
     } catch {
-      // Invalid barcode value (e.g. empty/malformed) — leave the SVG blank rather than crashing the screen.
+      // Invalid barcode value (e.g. empty/malformed) — leave the canvas blank rather than crashing the screen.
     }
   }, [value, height]);
 
-  return <svg ref={svgRef} />;
-}
+  return <canvas ref={canvasRef} />;
+});
+
+export default BarcodeImage;

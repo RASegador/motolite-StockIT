@@ -1,8 +1,10 @@
 import { doc, runTransaction } from 'firebase/firestore';
 import { cascadeDeductUnit, getItemUnits, getUnitCounts, totalBaseUnits } from '../lib/units';
 import { newId } from '../lib/format';
+import { generateSecureToken } from '../lib/secureToken';
+import { buildPublicReceipt } from '../lib/receipts';
 
-export async function completeSale(db, cartLines, amountReceived, { shopId, cashierId, cashierEmail }) {
+export async function completeSale(db, cartLines, amountReceived, { shopId, cashierId, cashierEmail, shopName, paymentMethod }) {
   if (!cartLines || cartLines.length === 0) throw new Error('Cart is empty');
 
   const receiptNo = 'R' + Date.now().toString(36).toUpperCase();
@@ -15,6 +17,18 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
       const snap = await transaction.get(doc(db, 'items', itemId));
       if (!snap.exists()) throw new Error('An item in this sale no longer exists');
       freshItems[itemId] = snap.data();
+    }
+
+    // The token is 128 bits of randomness (collision odds are astronomically
+    // low already), but since we're inside a transaction anyway, a
+    // belt-and-suspenders existence check costs nothing and gives a real,
+    // unconditional guarantee that "QR codes cannot be duplicated between
+    // transactions" rather than just a near-certainty.
+    let receiptToken = generateSecureToken();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const existing = await transaction.get(doc(db, 'receiptsPublic', receiptToken));
+      if (!existing.exists()) break;
+      receiptToken = generateSecureToken();
     }
 
     const finalStockByItem = {};
@@ -38,7 +52,11 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
       const price = line.unitPrice ?? item.sellingPrice ?? item.unitCost;
       const lineCost = item.unitCost ?? 0;
       return {
-        itemId: item.id, sku: item.sku, name: item.name,
+        // Firestore rejects `undefined` field values outright (the whole
+        // transaction.set() fails), so sku/name are defaulted rather than
+        // passed through raw — a fixture/legacy item missing one of these
+        // must not be able to take down the entire sale write.
+        itemId: item.id, sku: item.sku || '', name: item.name || '',
         qty: line.qty, unitName: line.unitName || item.baseUnitName || 'Piece', factor: line.factor ?? 1,
         unitPrice: price, unitCost: lineCost,
         lineTotal: price * line.qty, lineProfit: (price - lineCost) * line.qty,
@@ -54,7 +72,12 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
       id: newId('s'), receiptNo, timestamp: now, items: saleLines,
       subtotal: total, total, totalCost, totalProfit, amountReceived: received, change,
       cashierId, cashierEmail: cashierEmail || '', shopId, cancelled: false,
+      paymentMethod: paymentMethod || 'Cash', receiptToken,
     };
+
+    // Public, customer-safe mirror the QR code on the receipt points to —
+    // see buildPublicReceipt for exactly which fields are excluded.
+    transaction.set(doc(db, 'receiptsPublic', receiptToken), buildPublicReceipt(sale, shopName));
 
     Object.entries(finalStockByItem).forEach(([itemId, { newStock, newQuantity }]) => {
       transaction.set(doc(db, 'items', itemId), { ...freshItems[itemId], quantity: newQuantity, unitStock: newStock });
@@ -127,5 +150,13 @@ export async function cancelSale(db, sale) {
       });
     });
     transaction.set(doc(db, 'sales', sale.id), { cancelled: true, cancelledAt: now }, { merge: true });
+    // Flip the public mirror too, so a customer (or the owner) scanning this
+    // sale's QR code afterward sees it's been voided instead of a stale
+    // "valid" receipt. Older sales (pre-dating this feature) have no
+    // receiptToken — nothing to update in that case.
+    const receiptToken = saleSnap.data().receiptToken;
+    if (receiptToken) {
+      transaction.set(doc(db, 'receiptsPublic', receiptToken), { cancelled: true }, { merge: true });
+    }
   });
 }

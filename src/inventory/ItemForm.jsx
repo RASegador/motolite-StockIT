@@ -3,7 +3,9 @@ import { useCategories, useLocations, useSuppliers } from '../catalog/useCatalog
 import { computeSellingPrice } from '../lib/pricing';
 import { saveItem } from './inventoryActions';
 import { db } from '../firebase';
-import BarcodeImage from '../barcode/BarcodeImage';
+import { newId } from '../lib/format';
+import { generateBarcode } from '../lib/barcode';
+import ProductCodes from '../barcode/ProductCodes';
 
 const VEHICLE_TYPE_SUGGESTIONS = ['Motorcycle', 'Car', 'SUV', 'Truck', 'Van'];
 
@@ -26,12 +28,18 @@ function draftFromItem(item) {
 }
 
 function blankDraft() {
+  // The id (and therefore the barcode/QR, both derived from it) is
+  // generated up front — before the item is ever saved — so the Add Item
+  // form can display real, final codes immediately rather than a
+  // placeholder that would change after the first save.
+  const id = newId('i');
   return {
+    id, barcode: generateBarcode(id),
     sku: '', name: '', category: '', location: '', supplierIds: [],
     baseUnitName: 'Piece', baseUnitStock: 0, units: [],
     unitCost: 0, markupType: 'percent', markupValue: 0,
     batteryModel: '', voltage: 12, capacity: '', warrantyMonths: 12, vehicleType: '',
-    reorderPoint: 0, reorderUnit: 'Piece', barcode: '',
+    reorderPoint: 0, reorderUnit: 'Piece',
   };
 }
 
@@ -142,9 +150,9 @@ export default function ItemForm({ item, shopId, onDone }) {
       </fieldset>
 
       <fieldset>
-        <legend>Barcode</legend>
-        <input placeholder="Barcode" value={draft.barcode || ''} onChange={set('barcode')} />
-        {draft.barcode && <BarcodeImage value={draft.barcode} />}
+        <legend>Barcode &amp; QR Code</legend>
+        <p className="item-form-codes-hint">Generated automatically and linked to this product — cannot be edited.</p>
+        <ProductCodes item={draft} />
       </fieldset>
 
       {error && <p className="item-form-error">{error}</p>}

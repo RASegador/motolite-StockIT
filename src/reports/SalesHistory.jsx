@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Receipt } from 'lucide-react';
+import { Receipt, Eye } from 'lucide-react';
 import { useSales } from './useSales';
+import { useShops } from '../shops/useShops';
 import { cancelSale } from '../pos/salesActions';
 import { can } from '../lib/permissions';
 import { currency } from '../lib/format';
 import { db } from '../firebase';
+import ReceiptView from '../pos/Receipt';
 
 // Owner/Admin sees every shop's sales (role === 'owner' already makes
 // useSales fetch everything); a Cashier sees only their own — filtered
@@ -16,8 +18,10 @@ import { db } from '../firebase';
 // ability to cancel — Manager has viewSalesReports but not cancelSales.
 export default function SalesHistory({ role, shopId, userId }) {
   const allSales = useSales({ role, shopId });
+  const shops = useShops();
   const sales = role === 'cashier' ? allSales.filter((s) => s.cashierId === userId) : allSales;
   const [error, setError] = useState('');
+  const [viewingSale, setViewingSale] = useState(null);
 
   async function handleCancel(sale) {
     setError('');
@@ -44,14 +48,28 @@ export default function SalesHistory({ role, shopId, userId }) {
               <td>{currency(s.total)}</td>
               <td>{s.cancelled ? 'Cancelled' : 'Completed'}</td>
               <td>
-                {!s.cancelled && can(role, 'cancelSales') && (
-                  <button onClick={() => handleCancel(s)}>Cancel</button>
-                )}
+                <div className="list-row-actions">
+                  <button className="icon-button" aria-label="View receipt" onClick={() => setViewingSale(s)}>
+                    <Eye size={14} />
+                  </button>
+                  {!s.cancelled && can(role, 'cancelSales') && (
+                    <button className="btn-danger" onClick={() => handleCancel(s)}>Cancel</button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {viewingSale && (
+        <ReceiptView
+          sale={viewingSale}
+          shopName={shops.find((sh) => sh.id === viewingSale.shopId)?.name || ''}
+          copyLabel={role === 'cashier' ? 'Customer Copy' : 'Owner Copy'}
+          onClose={() => setViewingSale(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeShopComparisonStats } from './dashboardStats';
+import { computeShopComparisonStats, filterSalesForChart, groupSalesByDate } from './dashboardStats';
 
 const shops = [{ id: 'shopA', name: 'Branch A' }, { id: 'shopB', name: 'Branch B' }];
 const items = [
@@ -35,5 +35,57 @@ describe('computeShopComparisonStats', () => {
     expect(totals.revenue).toBe(4000); // 1000 (shopA, non-cancelled) + 3000 (shopB)
     expect(totals.unitsSold).toBe(6); // 3 + 2 + 1
     expect(totals.outOfStockCount).toBe(1);
+  });
+});
+
+describe('filterSalesForChart', () => {
+  const dated = [
+    { shopId: 'shopA', total: 100, cancelled: false, timestamp: new Date('2026-07-01T10:00:00').getTime(), items: [{ qty: 1 }] },
+    { shopId: 'shopA', total: 200, cancelled: false, timestamp: new Date('2026-07-02T10:00:00').getTime(), items: [{ qty: 2 }] },
+    { shopId: 'shopB', total: 300, cancelled: false, timestamp: new Date('2026-07-02T10:00:00').getTime(), items: [{ qty: 3 }] },
+    { shopId: 'shopA', total: 400, cancelled: true, timestamp: new Date('2026-07-02T10:00:00').getTime(), items: [{ qty: 4 }] },
+  ];
+
+  it('defaults to every shop, all dates, excluding cancelled sales', () => {
+    const result = filterSalesForChart(dated, {});
+    expect(result).toHaveLength(3);
+  });
+
+  it('filters to a single shop when shopId is given', () => {
+    const result = filterSalesForChart(dated, { shopId: 'shopA' });
+    expect(result.map((s) => s.total)).toEqual([100, 200]);
+  });
+
+  it('"all" behaves the same as no shopId filter', () => {
+    expect(filterSalesForChart(dated, { shopId: 'all' })).toHaveLength(3);
+  });
+
+  it('filters to a date range (inclusive of both endpoints)', () => {
+    const result = filterSalesForChart(dated, { startDate: '2026-07-02', endDate: '2026-07-02' });
+    expect(result.map((s) => s.total)).toEqual([200, 300]);
+  });
+
+  it('combines shop and date filters', () => {
+    const result = filterSalesForChart(dated, { shopId: 'shopA', startDate: '2026-07-02', endDate: '2026-07-02' });
+    expect(result.map((s) => s.total)).toEqual([200]);
+  });
+});
+
+describe('groupSalesByDate', () => {
+  it('sums revenue and units per calendar day, sorted ascending', () => {
+    const sales = [
+      { total: 200, timestamp: new Date('2026-07-02T09:00:00').getTime(), items: [{ qty: 2 }] },
+      { total: 100, timestamp: new Date('2026-07-01T09:00:00').getTime(), items: [{ qty: 1 }] },
+      { total: 300, timestamp: new Date('2026-07-02T18:00:00').getTime(), items: [{ qty: 3 }] },
+    ];
+    const result = groupSalesByDate(sales);
+    expect(result).toEqual([
+      { date: '2026-07-01', revenue: 100, unitsSold: 1 },
+      { date: '2026-07-02', revenue: 500, unitsSold: 5 },
+    ]);
+  });
+
+  it('returns an empty array for no sales', () => {
+    expect(groupSalesByDate([])).toEqual([]);
   });
 });

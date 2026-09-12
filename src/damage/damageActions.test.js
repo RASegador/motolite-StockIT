@@ -57,7 +57,7 @@ describe('approveDamage', () => {
   it('refuses to approve the same report twice', async () => {
     const reportId = await reportDamage(mgrDb, { itemId: 'item1', shopId: 'shopA', quantity: 3, reason: 'damaged', reportedBy: 'cashA' });
     await approveDamage(mgrDb, reportId, 'mgrA');
-    await expect(approveDamage(mgrDb, reportId, 'mgrA')).rejects.toThrow(/already resolved/i);
+    await expect(approveDamage(mgrDb, reportId, 'mgrA')).rejects.toThrow(/already been resolved/i);
   });
 });
 

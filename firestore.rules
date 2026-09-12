@@ -13,16 +13,42 @@ service cloud.firestore {
     function myShopId() {
       return isSignedIn() ? myProfile().shopId : null;
     }
-    // `!= false` (not `== true`) so a legacy profile doc with no `active`
-    // field at all is still treated as active, rather than locking every
-    // pre-existing account out the moment this rule ships.
+    // `.get('active', true)` (not direct `.active` access) so a legacy
+    // profile doc with no `active` field at all is still treated as active,
+    // rather than locking every pre-existing account out the moment this
+    // rule ships. Direct property access (`myProfile().active`) throws
+    // "Property active is undefined on object" when the key is absent
+    // instead of evaluating to null/undefined the way the original comment
+    // here assumed — `.get(key, default)` is the actual safe-default idiom
+    // Firestore's rules language provides for a possibly-missing map key.
     function isActive() {
-      return isSignedIn() && myProfile().active != false;
+      return isSignedIn() && myProfile().get('active', true) != false;
     }
     function isOwner() { return myRole() == 'owner' && isActive(); }
     function isManager() { return myRole() == 'manager' && isActive(); }
     function isCashier() { return myRole() == 'cashier' && isActive(); }
     function sameShop(shopId) { return isSignedIn() && shopId == myShopId(); }
+    // Safe field read off a `resource` for use in read/list rules. Two
+    // distinct emulator/rules-language gotchas made the plain
+    // `resource.data.shopId` idiom crash instead of failing closed:
+    // (1) `resource` itself is `null` when the target document doesn't
+    // exist (e.g. a read right after a delete, or checking a
+    // not-yet-created destination doc) — dereferencing `.data` on that
+    // throws "Null value error"; (2) even when `resource` exists, some
+    // `list` queries evaluate the rule before/without the field present
+    // (or against docs missing the key), and direct map property access
+    // (`resource.data.shopId`) throws "Property shopId is undefined on
+    // object" instead of evaluating to null the way plain JS would — the
+    // rules language's actual safe-default idiom is `.get(key, default)`.
+    // Routing every per-shop read/list rule through this helper (instead
+    // of accessing the field directly at the call site, where it's too
+    // late to guard) fixes both classes at once.
+    function docField(res, key) {
+      return res != null ? res.data.get(key, null) : null;
+    }
+    function sameShopAsDoc(res, key) {
+      return isSignedIn() && docField(res, key) == myShopId();
+    }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
@@ -41,19 +67,19 @@ service cloud.firestore {
     }
 
     match /items/{itemId} {
-      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() ||
         (isManager() && sameShop(request.resource.data.shopId));
       allow update: if isOwner() ||
-        (isManager() && sameShop(resource.data.shopId) &&
+        (isManager() && sameShopAsDoc(resource, 'shopId') &&
           request.resource.data.shopId == resource.data.shopId) ||
-        (isCashier() && sameShop(resource.data.shopId) &&
+        (isCashier() && sameShopAsDoc(resource, 'shopId') &&
           onlyChanged(['quantity', 'unitStock', 'reservedForReview']));
-      allow delete: if isOwner() || (isManager() && sameShop(resource.data.shopId));
+      allow delete: if isOwner() || (isManager() && sameShopAsDoc(resource, 'shopId'));
     }
 
     match /movements/{movementId} {
-      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() || sameShop(request.resource.data.shopId);
       allow update, delete: if isOwner();
     }
@@ -63,7 +89,7 @@ service cloud.firestore {
       // table (Shop Manager and Cashier both get "—" for Cancel sales) —
       // unlike every other per-shop collection, this is NOT opened up to
       // Manager.
-      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() ||
         (isCashier() && sameShop(request.resource.data.shopId));
       allow update: if isOwner();
@@ -71,16 +97,16 @@ service cloud.firestore {
     }
 
     match /restocks/{restockId} {
-      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() || sameShop(request.resource.data.shopId);
       allow update, delete: if isOwner();
     }
 
     match /damageReports/{reportId} {
-      allow read: if isSignedIn() && (isOwner() || sameShop(resource.data.shopId));
+      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() || sameShop(request.resource.data.shopId);
       allow update: if isOwner() ||
-        (isManager() && sameShop(resource.data.shopId) &&
+        (isManager() && sameShopAsDoc(resource, 'shopId') &&
           onlyChanged(['status', 'resolvedBy', 'resolvedAt']));
       allow delete: if isOwner();
     }
@@ -90,13 +116,33 @@ service cloud.firestore {
       // (or Owner/Admin) — the sending shop's Manager can read it (to see
       // it's still in transit) but not confirm it themselves.
       allow read: if isSignedIn() && (isOwner() ||
-        sameShop(resource.data.fromShopId) || sameShop(resource.data.toShopId));
+        sameShopAsDoc(resource, 'fromShopId') || sameShopAsDoc(resource, 'toShopId'));
       allow create: if isOwner() ||
         (isManager() && sameShop(request.resource.data.fromShopId));
       allow update: if isOwner() ||
-        (isManager() && sameShop(resource.data.toShopId) &&
+        (isManager() && sameShopAsDoc(resource, 'toShopId') &&
           onlyChanged(['status', 'confirmedBy', 'confirmedAt', 'confirmedQuantity']));
       allow delete: if isOwner();
+    }
+
+    // Public, customer-safe mirrors reached by scanning a product QR code or
+    // a transaction receipt's QR code — anyone can read (no login), because
+    // that's the entire point of the QR flow, but only the roles that can
+    // already write the underlying item/sale can write here. Both mirrors
+    // deliberately hold a curated field subset (see buildPublicProduct /
+    // buildPublicReceipt in src/lib/receipts.js) — never the full document.
+    match /productPublic/{itemId} {
+      allow read: if true;
+      allow write: if isOwner() || isManager();
+    }
+    match /receiptsPublic/{token} {
+      allow read: if true;
+      // Created by the same roles that can create a `sales` doc; the only
+      // update ever made afterward is cancelSale() flipping `cancelled`,
+      // which is Owner-only, mirroring the `sales` collection's own rules.
+      allow create: if isOwner() || isCashier();
+      allow update: if isOwner();
+      allow delete: if false;
     }
 
     match /categories/{id} {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ShoppingCart, Search, Plus, Minus } from 'lucide-react';
 import { useItems } from '../inventory/useItems';
+import { useShops } from '../shops/useShops';
 import { getItemUnits } from '../lib/units';
 import { currency } from '../lib/format';
 import { completeSale } from './salesActions';
@@ -8,11 +9,16 @@ import { useBarcodeScanner } from '../barcode/useBarcodeScanner';
 import { db } from '../firebase';
 import Receipt from './Receipt';
 
+const PAYMENT_METHODS = ['Cash', 'GCash', 'Card', 'Other'];
+
 export default function POSView({ role, shopId, cashierId, cashierEmail }) {
   const items = useItems({ role, shopId });
+  const shops = useShops();
+  const shopName = shops.find((s) => s.id === shopId)?.name || '';
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState([]); // [{ itemId, sku, name, qty, unitName, unitPrice, factor }]
   const [amountReceived, setAmountReceived] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [error, setError] = useState('');
   const [completedSale, setCompletedSale] = useState(null);
 
@@ -61,10 +67,13 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
   async function handleCheckout() {
     setError('');
     try {
-      const sale = await completeSale(db, cart, amountReceived || null, { shopId, cashierId, cashierEmail });
+      const sale = await completeSale(db, cart, amountReceived || null, {
+        shopId, cashierId, cashierEmail, shopName, paymentMethod,
+      });
       setCompletedSale(sale);
       setCart([]);
       setAmountReceived('');
+      setPaymentMethod('Cash');
     } catch (err) {
       setError(err.message);
     }
@@ -107,6 +116,10 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
       </div>
 
       <div className="pos-cart-card">
+        {/* Static branding — always rendered on page load, independent of
+            `completedSale`/cart state, unlike the logo on the printed
+            Receipt (which only exists once a sale completes). */}
+        <img src="/branding/motolite-logo.png" alt="Motolite" className="pos-cart-logo" />
         <h3><ShoppingCart size={16} /> Cart</h3>
         <ul className="pos-cart-lines">
           {cart.map((line) => {
@@ -130,13 +143,21 @@ export default function POSView({ role, shopId, cashierId, cashierEmail }) {
           {cart.length === 0 && <li className="pos-empty">Cart is empty.</li>}
         </ul>
         <p className="pos-total">Total: {currency(total)}</p>
-        <input placeholder="Amount received" type="number" value={amountReceived}
-          onChange={(e) => setAmountReceived(e.target.value)} />
+        <label className="pos-payment-method">
+          Payment method
+          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
+        {paymentMethod === 'Cash' && (
+          <input placeholder="Amount received" type="number" value={amountReceived}
+            onChange={(e) => setAmountReceived(e.target.value)} />
+        )}
         {error && <p className="pos-error">{error}</p>}
         <button className="btn-primary pos-checkout-btn" disabled={cart.length === 0} onClick={handleCheckout}>Checkout</button>
       </div>
 
-      {completedSale && <Receipt sale={completedSale} onClose={() => setCompletedSale(null)} />}
+      {completedSale && <Receipt sale={completedSale} shopName={shopName} onClose={() => setCompletedSale(null)} />}
     </div>
   );
 }

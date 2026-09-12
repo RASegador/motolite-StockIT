@@ -2,6 +2,7 @@ import { doc, setDoc, deleteDoc, runTransaction } from 'firebase/firestore';
 import { getItemUnits, totalBaseUnits, cascadeDeductUnit, getUnitCounts } from '../lib/units';
 import { computeSellingPrice } from '../lib/pricing';
 import { newId } from '../lib/format';
+import { buildPublicProduct } from '../lib/receipts';
 
 export async function saveItem(db, draft, { shopId: activeShopId }) {
   const id = draft.id || newId('i');
@@ -27,16 +28,22 @@ export async function saveItem(db, draft, { shopId: activeShopId }) {
   // short-circuit to the OLD price and silently ignore markup/cost edits.
   const sellingPrice = computeSellingPrice(draft.unitCost, draft.markupType || 'percent', draft.markupValue || 0);
 
-  await setDoc(doc(db, 'items', id), {
+  const savedItem = {
     ...draft, id, shopId, quantity, unitStock, baseUnitName, sellingPrice,
     reservedForReview: draft.reservedForReview ?? 0,
     units: (draft.units || []).map(({ stock, ...u }) => u),
-  });
+  };
+  await setDoc(doc(db, 'items', id), savedItem);
+  // Keep the public, customer-safe mirror (read by the unauthenticated
+  // product QR page) in sync with every create/edit — see buildPublicProduct
+  // for exactly which fields are considered safe to expose.
+  await setDoc(doc(db, 'productPublic', id), buildPublicProduct(savedItem));
   return id;
 }
 
 export async function deleteItem(db, itemId) {
   await deleteDoc(doc(db, 'items', itemId));
+  await deleteDoc(doc(db, 'productPublic', itemId));
 }
 
 export async function recordMovement(db, itemId, type, qty, reason) {

@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 import { useSuppliers } from '../catalog/useCatalog';
 import { getItemUnits, getUnitCounts } from '../lib/units';
 import { currency } from '../lib/format';
-import BarcodeImage from '../barcode/BarcodeImage';
+import ProductCodes from '../barcode/ProductCodes';
 
 // Read-only detail panel — available to anyone with viewInventory (including
 // Cashier, who can't edit), so there's a way to see everything about an item
@@ -61,8 +61,8 @@ export default function ItemDetailView({ item, onClose }) {
 
         {item.barcode && (
           <div className="item-detail-barcode">
-            <h3>Barcode</h3>
-            <BarcodeImage value={item.barcode} height={60} />
+            <h3>Barcode &amp; QR Code</h3>
+            <ProductCodes item={item} />
           </div>
         )}
       </div>
