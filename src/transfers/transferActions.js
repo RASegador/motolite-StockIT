@@ -68,7 +68,13 @@ export async function initiateTransfer(db, { itemId, fromShopId, toShopId, quant
   return transferId;
 }
 
-export async function confirmReceipt(db, transferId, confirmedQuantity, confirmedBy) {
+// `notes` is the discrepancy reason — required by the UI (TransfersView)
+// whenever confirmedQuantity differs from what was actually shipped, so a
+// short quantity is never silently swallowed into a bare "disputed"
+// status. Recorded on the transfer doc itself so it shows up wherever the
+// transfer's history is read (Activity Log's "Transfer In" entry —
+// src/reports/activityFeed.js — and any Requests Center detail view).
+export async function confirmReceipt(db, transferId, confirmedQuantity, confirmedBy, notes = '') {
   const qty = Math.max(0, Number(confirmedQuantity) || 0);
   const now = Date.now();
   // Set inside the transaction (from the fresh-read transfer doc) so the
@@ -98,6 +104,7 @@ export async function confirmReceipt(db, transferId, confirmedQuantity, confirme
       resolvedStatus = 'disputed';
       transaction.set(transferRef, {
         ...transfer, status: 'disputed', confirmedBy, confirmedAt: now, confirmedQuantity: qty,
+        notes: notes || '',
       });
       return;
     }
@@ -130,6 +137,7 @@ export async function confirmReceipt(db, transferId, confirmedQuantity, confirme
     });
     transaction.set(transferRef, {
       ...transfer, status: 'received', confirmedBy, confirmedAt: now, confirmedQuantity: qty,
+      notes: notes || '',
     });
   });
 

@@ -515,4 +515,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* src/restock/RestockView.jsx */
 .restock-error { color: #c1272d; font-size: 13px; margin: 0 0 10px; }
 .restock-view h3 { margin-top: 24px; }
+
+/* src/transfers/TransfersView.jsx — Receive function */
+.transfer-error { color: #c1272d; font-size: 13px; margin: 0 0 10px; }
+.transfer-receive-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.transfer-discrepancy-note { color: #c1272d; font-size: 12px; margin-top: 2px; }
 .public-page-loading, .public-page-error { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #666; text-align: center; padding: 24px; }

@@ -17,6 +17,7 @@ export default function TransfersView({ role, shopId, userId }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [confirmQty, setConfirmQty] = useState({});
+  const [confirmNotes, setConfirmNotes] = useState({});
   const [error, setError] = useState('');
 
   async function handleInitiate(e) {
@@ -34,10 +35,20 @@ export default function TransfersView({ role, shopId, userId }) {
     }
   }
 
-  async function handleConfirm(transferId) {
+  // A short/over shipment must be explained — never silently swallowed
+  // into a bare "disputed" status (see the "Add a Receive Function" spec:
+  // "If the received quantity differs from the expected quantity, require
+  // the user to record the discrepancy and reason").
+  async function handleConfirm(transferId, expectedQty) {
     setError('');
+    const receivedQty = Number(confirmQty[transferId] ?? 0);
+    const notes = (confirmNotes[transferId] || '').trim();
+    if (receivedQty !== expectedQty && !notes) {
+      setError(`Received quantity (${receivedQty}) differs from expected (${expectedQty}) — enter a reason before confirming.`);
+      return;
+    }
     try {
-      await confirmReceipt(db, transferId, Number(confirmQty[transferId] ?? 0), userId);
+      await confirmReceipt(db, transferId, receivedQty, userId, notes);
     } catch (err) {
       setError(err.message);
     }
@@ -89,7 +100,7 @@ export default function TransfersView({ role, shopId, userId }) {
 
       <table>
         <thead>
-          <tr><th>Item</th><th>From</th><th>To</th><th>Qty</th><th>Status</th><th>Confirm</th></tr>
+          <tr><th>Item</th><th>From</th><th>To</th><th>Expected qty</th><th>Status</th><th>Receive</th></tr>
         </thead>
         <tbody>
           {transfers.map((t) => {
@@ -97,21 +108,35 @@ export default function TransfersView({ role, shopId, userId }) {
             const toShop = shops.find((s) => s.id === t.toShopId);
             const canConfirmHere = t.status === 'in_transit' && can(role, 'confirmTransfer')
               && (role === 'owner' || t.toShopId === shopId);
+            const receivedQty = Number(confirmQty[t.id] ?? t.quantity);
+            const qtyDiffers = receivedQty !== t.quantity;
             return (
               <tr key={t.id}>
                 <td>{t.itemSku}</td>
                 <td>{fromShop?.name || t.fromShopId}</td>
                 <td>{toShop?.name || t.toShopId}</td>
                 <td>{t.quantity}</td>
-                <td>{t.status}</td>
+                <td>
+                  {t.status}
+                  {t.status === 'disputed' && t.notes && (
+                    <div className="transfer-discrepancy-note">
+                      Expected {t.quantity}, received {t.confirmedQuantity} — {t.notes}
+                    </div>
+                  )}
+                </td>
                 <td>
                   {canConfirmHere && (
-                    <>
+                    <div className="transfer-receive-cell">
                       <input type="number" placeholder="Qty received" style={{ width: 80 }}
                         value={confirmQty[t.id] ?? t.quantity}
                         onChange={(e) => setConfirmQty({ ...confirmQty, [t.id]: e.target.value })} />
-                      <button className="btn-primary" onClick={() => handleConfirm(t.id)}>Confirm</button>
-                    </>
+                      {qtyDiffers && (
+                        <input placeholder="Reason for discrepancy (required)" style={{ width: 200 }}
+                          value={confirmNotes[t.id] || ''}
+                          onChange={(e) => setConfirmNotes({ ...confirmNotes, [t.id]: e.target.value })} />
+                      )}
+                      <button className="btn-primary" onClick={() => handleConfirm(t.id, t.quantity)}>Confirm receipt</button>
+                    </div>
                   )}
                 </td>
               </tr>

@@ -136,7 +136,11 @@ export default function App() {
           ? requireOwnerShop(<DamageReportsView role={role} shopId={writeShopId} userId={user.uid} />)
           : defaultView();
       case 'transfers':
-        return can(role, 'initiateTransfer')
+        // Cashier can't initiate a transfer but can now receive/confirm
+        // one (see permissions.js) — either permission gets them into
+        // this screen, TransfersView itself hides the "Initiate" button
+        // and only exposes what the role can actually do.
+        return (can(role, 'initiateTransfer') || can(role, 'confirmTransfer'))
           ? requireOwnerShop(<TransfersView role={role} shopId={writeShopId} userId={user.uid} />)
           : defaultView();
       case 'sales':

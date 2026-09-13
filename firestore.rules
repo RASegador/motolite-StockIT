@@ -98,16 +98,26 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
+    // "Inventory Permissions, Requests, and Receiving Workflow" spec: only
+    // the Owner has direct authority to add, edit, or manually adjust an
+    // item — Manager/Warehouse/Cashier only ever touch this collection as
+    // a side effect of the request workflow (initiateTransfer deducting
+    // the source item, confirmReceipt crediting/creating the destination
+    // item), which only ever changes quantity/unitStock (and, for a
+    // brand-new destination item, creates a doc carrying `sourceItemId` —
+    // see destItemId()/confirmReceipt in transferActions.js). Nothing
+    // else — item info edits (name, price, sku, category, shopId, ...) or
+    // an item's outright creation/deletion as a manual action — is ever
+    // permitted for a non-Owner, at the rules layer as well as the UI.
     match /items/{itemId} {
       allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
       allow create: if isOwner() ||
-        (isLocationStaff() && sameShop(request.resource.data.shopId));
+        ((isLocationStaff() || isCashier()) && request.resource.data.shopId == myShopId() &&
+          request.resource.data.get('sourceItemId', null) != null);
       allow update: if isOwner() ||
-        (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
-          request.resource.data.shopId == resource.data.shopId) ||
-        (isCashier() && sameShopAsDoc(resource, 'shopId') &&
+        ((isLocationStaff() || isCashier()) && sameShopAsDoc(resource, 'shopId') &&
           onlyChanged(['quantity', 'unitStock', 'reservedForReview']));
-      allow delete: if isOwner() || (isLocationStaff() && sameShopAsDoc(resource, 'shopId'));
+      allow delete: if isOwner();
     }
 
     match /movements/{movementId} {
@@ -155,9 +165,13 @@ service cloud.firestore {
         sameShopAsDoc(resource, 'fromShopId') || sameShopAsDoc(resource, 'toShopId'));
       allow create: if isOwner() ||
         (isLocationStaff() && sameShop(request.resource.data.fromShopId));
+      // Cashier can confirm receipt too now (spec: "receive and confirm
+      // approved restocks or branch transfers when permitted") — `notes`
+      // is the discrepancy reason, required by the UI whenever the
+      // confirmed quantity differs from what was shipped.
       allow update: if isOwner() ||
-        (isLocationStaff() && sameShopAsDoc(resource, 'toShopId') &&
-          onlyChanged(['status', 'confirmedBy', 'confirmedAt', 'confirmedQuantity']));
+        ((isLocationStaff() || isCashier()) && sameShopAsDoc(resource, 'toShopId') &&
+          onlyChanged(['status', 'confirmedBy', 'confirmedAt', 'confirmedQuantity', 'notes']));
       allow delete: if isOwner();
     }
 
@@ -179,12 +193,13 @@ service cloud.firestore {
           onlyChanged(['status']) && resource.data.get('status', 'pending') == 'pending' &&
           request.resource.data.status == 'cancelled') ||
         // Closing the loop: whoever confirms the linked Transfer In (the
-        // requesting location's own staff — Manager for a store, Warehouse
-        // for a warehouse-to-warehouse request) may flip an already-
-        // approved request straight to 'fulfilled'. See confirmReceipt()
-        // in src/transfers/transferActions.js, which makes exactly this
-        // write right after the matching transfer is confirmed received.
-        (isLocationStaff() && sameShopAsDoc(resource, 'requestingShopId') &&
+        // requesting location's own staff — Manager or Cashier for a
+        // store, Warehouse for a warehouse-to-warehouse request) may flip
+        // an already-approved request straight to 'fulfilled'. See
+        // confirmReceipt() in src/transfers/transferActions.js, which
+        // makes exactly this write right after the matching transfer is
+        // confirmed received.
+        ((isLocationStaff() || isCashier()) && sameShopAsDoc(resource, 'requestingShopId') &&
           onlyChanged(['status', 'fulfilledAt']) &&
           resource.data.get('status', 'pending') == 'approved' &&
           request.resource.data.status == 'fulfilled');

@@ -14,9 +14,16 @@ describe('can', () => {
     expect(can('owner', 'viewActivityLog')).toBe(true);
   });
 
-  it('gives manager full inventory/transfer/report control but no POS', () => {
-    expect(can('manager', 'editInventory')).toBe(true);
+  it('gives manager transfer/report control but never a direct inventory edit or POS', () => {
+    // Per the "Inventory Permissions, Requests, and Receiving Workflow"
+    // spec, only the Owner can add/edit/manually adjust inventory — a
+    // Manager works through Restock/Transfer Requests + Receive instead.
+    expect(can('manager', 'editInventory')).toBe(false);
+    expect(can('manager', 'deleteInventory')).toBe(false);
+    expect(can('manager', 'stockReceive')).toBe(false);
+    expect(can('manager', 'stockIssue')).toBe(false);
     expect(can('manager', 'initiateTransfer')).toBe(true);
+    expect(can('manager', 'confirmTransfer')).toBe(true);
     expect(can('manager', 'approveDamage')).toBe(true);
     expect(can('manager', 'viewReports')).toBe(true);
     expect(can('manager', 'pos')).toBe(false);
@@ -24,11 +31,14 @@ describe('can', () => {
     expect(can('manager', 'viewActivityLog')).toBe(false);
   });
 
-  it('gives cashier POS, read-only inventory, and stock receive/issue, nothing else', () => {
+  it('gives cashier POS, read-only inventory, and request-based receiving only', () => {
     expect(can('cashier', 'pos')).toBe(true);
     expect(can('cashier', 'viewInventory')).toBe(true);
-    expect(can('cashier', 'stockReceive')).toBe(true);
-    expect(can('cashier', 'stockIssue')).toBe(true);
+    // No manual stock adjustment — receiving happens only by confirming an
+    // approved Transfer (see TransfersView.jsx), never a raw stock edit.
+    expect(can('cashier', 'stockReceive')).toBe(false);
+    expect(can('cashier', 'stockIssue')).toBe(false);
+    expect(can('cashier', 'confirmTransfer')).toBe(true);
     expect(can('cashier', 'viewOwnSales')).toBe(true);
     expect(can('cashier', 'editInventory')).toBe(false);
     expect(can('cashier', 'approveDamage')).toBe(false);
