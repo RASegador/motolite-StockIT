@@ -3,7 +3,7 @@
 // src/reports/OwnerDashboard.jsx. Pure/no-Firestore-access on purpose —
 // every source array here already comes from an owner-scoped hook
 // (useMovementsLog/useSales/useDamageReports/useTransfers, all called with
-// `{ role: 'owner' }` so they already see every shop with no extra query
+// `{ role: 'admin' }` so they already see every shop with no extra query
 // needed), so this module only has to normalize+merge, which keeps it
 // trivially unit-testable without the Firestore emulator.
 //
@@ -28,6 +28,7 @@ export const ACTIVITY_TYPES = [
   'item_sold', 'sale_cancelled', 'item_returned',
   'item_damaged', 'transfer_out', 'transfer_in',
   'restock_request_created', 'restock_request_reviewed', 'restock_request_fulfilled',
+  'damage_sent_onward', 'damage_received', 'damage_outcome_resolved',
 ];
 
 const ACTIVITY_LABELS = {
@@ -43,6 +44,9 @@ const ACTIVITY_LABELS = {
   restock_request_created: 'Restock Request Created',
   restock_request_reviewed: 'Restock Request Approved/Rejected',
   restock_request_fulfilled: 'Restock Request Fulfilled',
+  damage_sent_onward: 'Sent Onward for Resolution',
+  damage_received: 'Received at Destination',
+  damage_outcome_resolved: 'Damage/Return Outcome Resolved',
 };
 
 export function activityLabel(type) {
@@ -81,23 +85,88 @@ function damageActivityType(reason) {
   return reason === 'returned' ? 'item_returned' : 'item_damaged';
 }
 
+// A report reaching 'sent_to_warehouse'/'received_at_destination'/an
+// outcome status was necessarily approved at some point (those states only
+// follow 'approved' — see damageActions.js) — so "was it approved or
+// rejected" is judged from whether it ever got PAST pending, not from its
+// current (possibly further-advanced) status.
+const POST_APPROVAL_STATUSES = new Set([
+  'approved', 'sent_to_warehouse', 'received_at_destination', 'repaired', 'replaced', 'disposed',
+]);
+
+// One damage/return/defective report can surface up to four log entries
+// across its lifecycle: reported (always), approved/rejected (once
+// resolved), sent onward + received at destination (only once an approved
+// report is actually shipped for repair/replacement/disposal — most never
+// leave the source store), and a final outcome. This mirrors the
+// multi-entry pattern fromTransfers/fromRestockRequests already use, and
+// keeps every stage of "where did this item go" visible in the Activity
+// Log, not just the initial report.
 function fromDamageReports(reports) {
-  return (reports || []).map((r) => ({
-    id: r.id,
-    timestamp: r.reportedAt,
-    type: damageActivityType(r.reason),
-    userId: r.reportedBy || null,
-    shopIds: r.shopId ? [r.shopId] : [],
-    itemId: r.itemId || null,
-    quantity: r.quantity ?? null,
-    previousQuantity: null,
-    newQuantity: null,
-    fromShopId: null,
-    toShopId: null,
-    reason: r.reason || '',
-    notes: r.status === 'pending' ? 'Pending review' : `${r.status === 'approved' ? 'Approved' : 'Rejected'} by ${r.resolvedBy || 'owner/manager'}`,
-    status: r.status || 'pending',
-  }));
+  const entries = [];
+  (reports || []).forEach((r) => {
+    entries.push({
+      id: r.id,
+      timestamp: r.reportedAt,
+      type: damageActivityType(r.reason),
+      userId: r.reportedBy || null,
+      shopIds: r.shopId ? [r.shopId] : [],
+      itemId: r.itemId || null,
+      quantity: r.quantity ?? null,
+      previousQuantity: null,
+      newQuantity: null,
+      fromShopId: null,
+      toShopId: null,
+      reason: r.reason || '',
+      notes: r.status === 'pending' ? 'Pending review'
+        : `${POST_APPROVAL_STATUSES.has(r.status) ? 'Approved' : 'Rejected'} by ${r.resolvedBy || 'owner/manager'}`,
+      status: r.status || 'pending',
+    });
+    if (r.sentAt) {
+      entries.push({
+        id: `${r.id}-sent`,
+        timestamp: r.sentAt,
+        type: 'damage_sent_onward',
+        userId: r.sentBy || null,
+        shopIds: [r.shopId, r.destinationShopId].filter(Boolean),
+        itemId: r.itemId || null,
+        quantity: r.quantity ?? null,
+        previousQuantity: null, newQuantity: null,
+        fromShopId: r.shopId || null, toShopId: r.destinationShopId || null,
+        reason: 'Sent onward for repair/replacement/disposal',
+        notes: '', status: r.status,
+      });
+    }
+    if (r.receivedAt) {
+      entries.push({
+        id: `${r.id}-received`,
+        timestamp: r.receivedAt,
+        type: 'damage_received',
+        userId: r.receivedBy || null,
+        shopIds: [r.shopId, r.destinationShopId].filter(Boolean),
+        itemId: r.itemId || null,
+        quantity: r.quantity ?? null,
+        previousQuantity: null, newQuantity: null,
+        fromShopId: r.shopId || null, toShopId: r.destinationShopId || null,
+        reason: 'Received at destination', notes: '', status: r.status,
+      });
+    }
+    if (r.outcomeAt) {
+      entries.push({
+        id: `${r.id}-outcome`,
+        timestamp: r.outcomeAt,
+        type: 'damage_outcome_resolved',
+        userId: r.outcomeBy || null,
+        shopIds: [r.destinationShopId || r.shopId].filter(Boolean),
+        itemId: r.itemId || null,
+        quantity: r.quantity ?? null,
+        previousQuantity: null, newQuantity: null,
+        fromShopId: null, toShopId: null,
+        reason: `Outcome: ${r.outcome}`, notes: r.outcomeNotes || '', status: r.outcome,
+      });
+    }
+  });
+  return entries;
 }
 
 // One transfer produces up to two distinct log entries — "Transfer Out" at
@@ -223,7 +292,7 @@ function fromRestockRequests(requests) {
 // fed from (`useMovementsLog`, `useDamageReports`, `useTransfers`,
 // `useRestockRequests`, and — for item/shop/user name lookups only, not as
 // an entry source — `useItems`/`useShops`/`useUsers`) is called with
-// `{ role: 'owner' }` (or `'warehouse'`, which also sees every request) by
+// `{ role: 'admin' }` (or `'warehouse'`, which also sees every request) by
 // the caller, so no location is silently excluded here.
 export function buildActivityFeed({ movements, damageReports, transfers, restockRequests }) {
   const entries = [

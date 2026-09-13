@@ -9,13 +9,24 @@ import { encodeLoginQr } from '../lib/credentials';
 import Modal from '../shared/Modal';
 import QRCodeImage from '../barcode/QRCodeImage';
 
-// Owner is deliberately absent here — there is exactly one Owner account,
-// created once out-of-band (scripts/create-owner.js), and it must never be
-// creatable or assignable from this screen. Firestore rules enforce the
-// same restriction server-side; this is just the UI staying consistent
-// with what the rules would refuse anyway.
-const CREATABLE_ROLES = ['manager', 'cashier', 'warehouse'];
-const BLANK_FORM = { username: '', fullName: '', role: 'cashier', shopId: '' };
+// Admin is deliberately absent from CREATABLE_ROLES — there is exactly one
+// Admin account, created once out-of-band (scripts/create-owner.js), and it
+// must never be creatable or assignable from this screen. Firestore rules
+// enforce the same restriction server-side; this is just the UI staying
+// consistent with what the rules would refuse anyway. Cashier is removed
+// per the "Manager Portal & Account Structure" spec — no longer creatable
+// or reassignable here; an existing Cashier account still shows in the
+// table below (its role select just won't match any of these options until
+// an Admin picks a new one).
+//
+// `useUsers()` returns RAW Firestore docs, not the resolved role from
+// useAuth()/resolveRole() — so every `u.role` check below deliberately
+// tests BOTH 'owner' (the pre-existing account's stored value) and 'admin'
+// (what any future bootstrap run of scripts/create-owner.js would write),
+// rather than relying on the client-side alias that only applies to the
+// logged-in user's OWN resolved role.
+const CREATABLE_ROLES = ['manager', 'warehouse'];
+const BLANK_FORM = { username: '', fullName: '', role: 'manager', shopId: '' };
 
 function OwnUsernameField({ uid, current }) {
   const [editing, setEditing] = useState(false);
@@ -160,13 +171,13 @@ export default function UsersView({ currentUid }) {
             <tr key={u.uid}>
               <td>{u.fullName}</td>
               <td>
-                {u.role === 'owner' && u.uid === currentUid
+                {(u.role === 'owner' || u.role === 'admin') && u.uid === currentUid
                   ? <OwnUsernameField uid={u.uid} current={u.username} />
                   : (u.username || '—')}
               </td>
               <td>
-                {u.role === 'owner'
-                  ? <span className="users-owner-badge">Owner</span>
+                {(u.role === 'owner' || u.role === 'admin')
+                  ? <span className="users-owner-badge">Admin</span>
                   : (
                     <select value={u.role} onChange={(e) => updateUserRole(u.uid, e.target.value)}>
                       {CREATABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -174,7 +185,7 @@ export default function UsersView({ currentUid }) {
                   )}
               </td>
               <td>
-                {u.role === 'owner' ? '—' : (
+                {(u.role === 'owner' || u.role === 'admin') ? '—' : (
                   <select value={u.shopId || ''} onChange={(e) => updateUserShop(u.uid, e.target.value)}>
                     <option value="">Unassigned</option>
                     {shops.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.type === 'warehouse' ? 'Warehouse' : 'Store'})</option>)}
@@ -182,7 +193,7 @@ export default function UsersView({ currentUid }) {
                 )}
               </td>
               <td>
-                {u.role === 'owner' ? '—' : (
+                {(u.role === 'owner' || u.role === 'admin') ? '—' : (
                   <button className={u.active ? 'btn-danger' : 'btn-secondary'} onClick={() => setUserActive(u.uid, !u.active)}>
                     {u.active ? 'Deactivate' : 'Reactivate'}
                   </button>

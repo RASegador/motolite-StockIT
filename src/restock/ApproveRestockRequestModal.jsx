@@ -21,7 +21,7 @@ import Modal from '../shared/Modal';
 // already relies on implicitly.
 export default function ApproveRestockRequestModal({ request, role, ownShopId, approverId, onClose, onDone }) {
   const shops = useShops();
-  const [sourceShopId, setSourceShopId] = useState(role === 'owner' ? '' : ownShopId);
+  const [sourceShopId, setSourceShopId] = useState(role === 'admin' ? '' : ownShopId);
   const sourceItems = useItems({ role: 'manager', shopId: sourceShopId || '__none__' });
   const matchingItems = sourceItems.filter((it) => it.sku === request.itemSku);
   const [sourceItemId, setSourceItemId] = useState('');
@@ -57,7 +57,7 @@ export default function ApproveRestockRequestModal({ request, role, ownShopId, a
           destination confirms receipt (Transfer In).
         </p>
         <div className="item-form-grid">
-          {role === 'owner' ? (
+          {role === 'admin' ? (
             <label className="item-form-field">
               <span className="item-form-field-label">Source location</span>
               <select value={sourceShopId} onChange={(e) => { setSourceShopId(e.target.value); setSourceItemId(''); }} required autoFocus>

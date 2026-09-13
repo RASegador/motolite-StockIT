@@ -107,7 +107,7 @@ export default function TransfersView({ role, shopId, userId }) {
             const fromShop = shops.find((s) => s.id === t.fromShopId);
             const toShop = shops.find((s) => s.id === t.toShopId);
             const canConfirmHere = t.status === 'in_transit' && can(role, 'confirmTransfer')
-              && (role === 'owner' || t.toShopId === shopId);
+              && (role === 'admin' || t.toShopId === shopId);
             const receivedQty = Number(confirmQty[t.id] ?? t.quantity);
             const qtyDiffers = receivedQty !== t.quantity;
             return (

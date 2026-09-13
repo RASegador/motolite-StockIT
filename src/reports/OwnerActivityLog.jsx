@@ -9,23 +9,23 @@ import { useShops } from '../shops/useShops';
 import { useUsers } from '../users/useUsers';
 import { buildActivityFeed, filterActivityFeed, activityLabel, ACTIVITY_TYPES } from './activityFeed';
 
-// Owner-only, system-wide audit trail — see activityFeed.js for how the
+// Admin-only, system-wide audit trail — see activityFeed.js for how the
 // four underlying collections (movements/damageReports/transfers, plus
 // items/shops/users for name lookups only) are normalized and merged.
-// Every hook below is called with `{ role: 'owner' }` deliberately, so this
-// view always sees every shop regardless of which shop the Owner has
+// Every hook below is called with `{ role: 'admin' }` deliberately, so this
+// view always sees every shop regardless of which shop the Admin has
 // picked as their "active shop" elsewhere in the app (that picker is only
 // for screens that WRITE a shopId — see App.jsx — and has no bearing on
-// what the Owner is allowed to read here).
+// what the Admin is allowed to read here).
 export default function OwnerActivityLog() {
   // 500 rows is generous headroom over useMovementsLog's own 100-row
   // default — this is meant to be the comprehensive log, not a recent-N
   // preview like the one on OwnerDashboard.
-  const movements = useMovementsLog({ role: 'owner' }, 500);
-  const damageReports = useDamageReports({ role: 'owner' });
-  const transfers = useTransfers({ role: 'owner' });
-  const restockRequests = useRestockRequests({ role: 'owner' });
-  const items = useItems({ role: 'owner' });
+  const movements = useMovementsLog({ role: 'admin' }, 500);
+  const damageReports = useDamageReports({ role: 'admin' });
+  const transfers = useTransfers({ role: 'admin' });
+  const restockRequests = useRestockRequests({ role: 'admin' });
+  const items = useItems({ role: 'admin' });
   const shops = useShops();
   const users = useUsers();
 
@@ -45,7 +45,15 @@ export default function OwnerActivityLog() {
   const userById = useMemo(() => new Map(users.map((u) => [u.uid, u])), [users]);
   const shopById = useMemo(() => new Map(shops.map((s) => [s.id, s])), [shops]);
   const itemById = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
-  const roleOf = (uid) => userById.get(uid)?.role || null;
+  // Reads the RAW stored role off the user doc (useUsers() doesn't resolve
+  // it) — normalized here so a legacy 'owner' doc and a freshly-bootstrapped
+  // 'admin' one (see scripts/create-owner.js) both read as 'admin' for
+  // filtering/display, same backward-compat mapping as resolveRole() in
+  // permissions.js.
+  const roleOf = (uid) => {
+    const r = userById.get(uid)?.role || null;
+    return r === 'owner' ? 'admin' : r;
+  };
 
   const filtered = useMemo(
     () => filterActivityFeed(feed, { shopId, userId, role, itemId, type, startDate, endDate }, roleOf),
@@ -76,7 +84,7 @@ export default function OwnerActivityLog() {
 
   return (
     <div className="activity-log-view">
-      <h2><ClipboardList size={18} /> Owner Activity Log</h2>
+      <h2><ClipboardList size={18} /> Admin Activity Log</h2>
 
       <div className="activity-log-filters">
         <label>
@@ -97,9 +105,8 @@ export default function OwnerActivityLog() {
           Role
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="all">All roles</option>
-            <option value="owner">Owner</option>
+            <option value="admin">Admin</option>
             <option value="manager">Manager</option>
-            <option value="cashier">Cashier</option>
             <option value="warehouse">Warehouse</option>
           </select>
         </label>
@@ -141,7 +148,7 @@ export default function OwnerActivityLog() {
               <tr key={e.id}>
                 <td>{new Date(e.timestamp).toLocaleString()}</td>
                 <td>{userLabel(e.userId)}</td>
-                <td>{roleOf(e.userId) || '—'}</td>
+                <td>{roleOf(e.userId) === 'admin' ? 'Admin' : (roleOf(e.userId) || '—')}</td>
                 <td>{shopLabel(e.shopIds[0])}</td>
                 <td>{itemLabel(e.itemId)}</td>
                 <td><span className={`activity-badge activity-${e.type}`}>{activityLabel(e.type)}</span></td>

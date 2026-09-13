@@ -45,7 +45,7 @@ export default function App() {
   if (!profile) {
     return (
       <div className="app-no-profile">
-        No account profile found. Ask your Owner/Admin to set up your account, then sign in again.
+        No account profile found. Ask your Admin to set up your account, then sign in again.
         <button onClick={logout}>Sign out</button>
       </div>
     );
@@ -53,7 +53,21 @@ export default function App() {
   if (profile.active === false) {
     return (
       <div className="app-deactivated">
-        Your account has been deactivated. Contact your Owner/Admin.
+        Your account has been deactivated. Contact your Admin.
+        <button onClick={logout}>Sign out</button>
+      </div>
+    );
+  }
+  // "Manager Portal & Account Structure" spec: Cashier is removed entirely.
+  // Checked on the STORED profile.role (never the resolved `role`, which
+  // would already have fallen through to the 'blocked' sentinel by the
+  // time this ran) so an old Cashier account gets this specific message
+  // instead of the generic "no access" one below — existing Cashier sales
+  // history is untouched, only new logins are blocked.
+  if (profile.role === 'cashier') {
+    return (
+      <div className="app-deactivated">
+        The Cashier role has been removed from this system. Contact your Admin for access.
         <button onClick={logout}>Sign out</button>
       </div>
     );
@@ -66,26 +80,37 @@ export default function App() {
   const shopName = shops.find((s) => s.id === shopId)?.name || '';
   // The shopId to use for shop-scoped WRITE screens only (POS, Inventory
   // create/edit, Damage report, Transfer initiate). Read/list screens that
-  // already branch on role === 'owner' to see every shop keep using
+  // already branch on role === 'admin' to see every shop keep using
   // `shopId`/`profile.shopId` unchanged.
-  const writeShopId = role === 'owner' ? ownerActiveShopId : shopId;
+  const writeShopId = role === 'admin' ? ownerActiveShopId : shopId;
 
-  // POSView/Receipt use `cashierEmail` to print who rang up a sale up —
-  // named for what it held before accounts had real emails. Manager/
-  // Cashier accounts now sign in with a Username backed by a synthetic,
-  // never-shown email (see src/lib/credentials.js), so their Firestore
-  // profile's fullName is what actually belongs on a printed receipt;
-  // user.email only remains as a fallback for the original Owner account.
+  // POSView/Receipt use `cashierEmail` to print who rang up a sale —
+  // named for what it held before accounts had real emails, and kept as
+  // a field name even now that Cashier itself is gone (a Manager can ring
+  // up sales too — see permissions.js). Manager accounts sign in with a
+  // Username backed by a synthetic, never-shown email (see
+  // src/lib/credentials.js), so their Firestore profile's fullName is
+  // what actually belongs on a printed receipt; user.email only remains
+  // as a fallback for the original Admin (Owner) account.
   function defaultView() {
-    if (role === 'owner') return <OwnerDashboard userId={user.uid} />;
+    if (role === 'admin') return <OwnerDashboard userId={user.uid} />;
     if (can(role, 'viewReports')) return <ShopReports shopId={shopId} shopName={shopName} />;
-    // Cashier has neither viewReports nor a shop-reports screen of their
-    // own — land them on POS instead of a screen they can't see.
-    return <POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={profile.fullName || user.email} />;
+    if (can(role, 'pos')) {
+      return <POSView role={role} shopId={writeShopId} cashierId={user.uid} cashierEmail={profile.fullName || user.email} />;
+    }
+    // A role with none of the above (only the 'blocked' sentinel for a
+    // missing/garbage profile.role should ever reach here — see
+    // resolveRole() in permissions.js) has nothing to land on.
+    return (
+      <div className="app-no-profile">
+        Your account doesn't have access to any screen yet. Ask your Admin to check your role.
+        <button onClick={logout}>Sign out</button>
+      </div>
+    );
   }
 
   function OwnerShopPicker() {
-    if (role !== 'owner') return null;
+    if (role !== 'admin') return null;
     return (
       <div className="owner-active-shop-picker">
         <label>
@@ -99,19 +124,20 @@ export default function App() {
     );
   }
 
-  // Each case is gated on the exact same permission Sidebar.jsx uses to
-  // decide whether to show that nav item (see NAV_ITEMS in Sidebar.jsx).
+  // Each case is gated on the exact same permission Topbar.jsx uses to
+  // decide whether to show that nav item (see NAV_ITEMS in Topbar.jsx).
   // This defends against ANY stale/invalid `view` value reaching a screen
-  // the current role isn't permitted to see — e.g. a Manager navigates to
-  // 'catalog', logs out, and a Cashier logs in on the same tab: `view` is
-  // still 'catalog', Sidebar correctly hides that nav item, but without
+  // the current role isn't permitted to see — e.g. an Admin navigates to
+  // 'catalog', logs out, and a Manager logs in on the same tab: `view` is
+  // still 'catalog', Topbar correctly hides that nav item, but without
   // this guard renderView() would still match `case 'catalog'` and render
-  // CatalogManager for the Cashier anyway.
+  // CatalogManager for the Manager anyway (Manager no longer has
+  // manageCategories — see permissions.js).
   // Owner must pick an active shop before using a screen that WRITES a
   // shopId onto a document (POS checkout, Damage report, Transfer
   // initiate) — otherwise that write would silently use shopId: null.
   function requireOwnerShop(node) {
-    if (role === 'owner' && !writeShopId) {
+    if (role === 'admin' && !writeShopId) {
       return (
         <div className="owner-shop-required">
           Select an active shop above before using this screen.

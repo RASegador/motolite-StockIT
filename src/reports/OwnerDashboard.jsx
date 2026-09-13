@@ -16,12 +16,12 @@ import { exportSalesReportPdf, exportInventoryReportPdf } from './pdfExport';
 import { currency } from '../lib/format';
 
 export default function OwnerDashboard({ userId }) {
-  const items = useItems({ role: 'owner' });
-  const sales = useSales({ role: 'owner' });
-  const movements = useMovementsLog({ role: 'owner' });
-  const damageReports = useDamageReports({ role: 'owner' });
-  const transfers = useTransfers({ role: 'owner' });
-  const restockRequests = useRestockRequests({ role: 'owner' });
+  const items = useItems({ role: 'admin' });
+  const sales = useSales({ role: 'admin' });
+  const movements = useMovementsLog({ role: 'admin' });
+  const damageReports = useDamageReports({ role: 'admin' });
+  const transfers = useTransfers({ role: 'admin' });
+  const restockRequests = useRestockRequests({ role: 'admin' });
   const shops = useShops();
   const users = useUsers();
 
@@ -50,7 +50,7 @@ export default function OwnerDashboard({ userId }) {
 
   // Sales chart filters — 'all' shops is the default, dates start unset
   // (no bound). Both combine, and the chart re-derives on every change with
-  // no refetch: `sales` is already every shop's data (useSales({role:'owner'})
+  // no refetch: `sales` is already every shop's data (useSales({role:'admin'})
   // has no shopId filter), so this is a pure client-side recompute.
   const [chartShopId, setChartShopId] = useState('all');
   const [chartStartDate, setChartStartDate] = useState('');

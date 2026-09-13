@@ -15,11 +15,10 @@ const NAV_ITEMS = [
   { key: 'transfers', label: 'Branch Transfers', icon: Truck, anyPermission: ['initiateTransfer', 'confirmTransfer'] },
   { key: 'restock', label: 'Restock', icon: PackageSearch, anyPermission: ['createRestockRequest', 'reviewRestockRequest'] },
   // Gated on 'viewOwnSales' OR 'viewSalesReports': 'viewOwnSales' is true
-  // for Owner and Cashier (Owner sees every sale, Cashier sees only their
-  // own — SalesHistory.jsx branches on role for which), and
-  // 'viewSalesReports' is true for Owner and Manager (Manager sees their
+  // for Admin only (sees every sale across every shop), and
+  // 'viewSalesReports' is true for Admin and Manager (Manager sees their
   // whole shop's sales, no Cancel button since Manager can't cancel). The
-  // OR covers all three roles that should see this nav item.
+  // OR covers both roles that should see this nav item.
   { key: 'sales', label: 'Sales History', icon: Receipt, anyPermission: ['viewOwnSales', 'viewSalesReports'] },
   { key: 'shops', label: 'Shops', icon: Store, permission: 'manageShops' },
   { key: 'users', label: 'Users', icon: ShieldCheck, permission: 'manageUsers' },
@@ -31,6 +30,16 @@ const NAV_ITEMS = [
 // every item they have permission for, just split across the inline row
 // and the dropdown instead of all squeezed into one row.
 const TABLET_PRIMARY_KEYS = ['overview', 'pos', 'inventory', 'sales'];
+
+// `role` here is always the already-resolved value from useAuth() (see
+// permissions.js's resolveRole()), so a legacy 'owner' doc already reads as
+// 'admin' by the time it gets here — the capitalize fallback below handles
+// 'admin' fine on its own, this just keeps the label logic explicit.
+function roleLabel(role) {
+  if (role === 'admin') return 'Admin';
+  if (!role) return '';
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
 
 export default function Topbar({ view, setView, role, fullName, onLogout }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -124,7 +133,7 @@ export default function Topbar({ view, setView, role, fullName, onLogout }) {
       <div className="topbar-right">
         <span className="topbar-user">
           <span className="topbar-user-name">{fullName}</span>
-          <span className="topbar-user-role">{role}</span>
+          <span className="topbar-user-role">{roleLabel(role)}</span>
         </span>
         <Tooltip label="Sign out" className="topbar-logout-wrap">
           <button className="topbar-logout" onClick={onLogout}>
@@ -145,7 +154,7 @@ export default function Topbar({ view, setView, role, fullName, onLogout }) {
 
       {mobileOpen && (
         <div className="topbar-mobile-panel" ref={mobileRef}>
-          <p className="topbar-mobile-user">{fullName} <span className="topbar-user-role">{role}</span></p>
+          <p className="topbar-mobile-user">{fullName} <span className="topbar-user-role">{roleLabel(role)}</span></p>
           {visibleItems.map((item) => (
             <button
               key={item.key}

@@ -5,7 +5,7 @@ import { db } from '../firebase';
 export function useItems({ role, shopId }) {
   const [items, setItems] = useState([]);
   useEffect(() => {
-    const itemsQuery = role === 'owner'
+    const itemsQuery = role === 'admin'
       ? collection(db, 'items')
       : query(collection(db, 'items'), where('shopId', '==', shopId));
     return onSnapshot(itemsQuery, (snap) => setItems(snap.docs.map((d) => d.data())));

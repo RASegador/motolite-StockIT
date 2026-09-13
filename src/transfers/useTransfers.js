@@ -11,7 +11,7 @@ export function useTransfers({ role, shopId }) {
   const [incoming, setIncoming] = useState([]);
 
   useEffect(() => {
-    if (role === 'owner') {
+    if (role === 'admin') {
       return onSnapshot(query(collection(db, 'transfers'), orderBy('initiatedAt', 'desc')), (snap) => {
         setOutgoing(snap.docs.map((d) => d.data()));
         setIncoming([]);
@@ -28,7 +28,7 @@ export function useTransfers({ role, shopId }) {
     return () => { unsubOut(); unsubIn(); };
   }, [role, shopId]);
 
-  if (role === 'owner') return outgoing;
+  if (role === 'admin') return outgoing;
   const byId = new Map();
   [...outgoing, ...incoming].forEach((t) => byId.set(t.id, t));
   return [...byId.values()].sort((a, b) => b.initiatedAt - a.initiatedAt);

@@ -76,7 +76,7 @@ export default function RestockView({ role, shopId, userId }) {
   // staff (also a reviewer) can only ever read their OWN assigned
   // location's items, so their alert view is scoped like everyone else's
   // even though they review requests system-wide.
-  const allItems = useItems(role === 'owner' ? { role: 'owner' } : { role, shopId });
+  const allItems = useItems(role === 'admin' ? { role: 'admin' } : { role, shopId });
   const shops = useShops();
   const warehouseShopIds = shops.filter((s) => s.type === 'warehouse').map((s) => s.id);
   const requests = useRestockRequests({ role, shopId });
@@ -118,7 +118,7 @@ export default function RestockView({ role, shopId, userId }) {
       </div>
       {error && <p className="restock-error">{error}</p>}
 
-      <h3>Low-stock alerts{role === 'owner' ? ' (all locations)' : ''}</h3>
+      <h3>Low-stock alerts{role === 'admin' ? ' (all locations)' : ''}</h3>
       <div className="activity-log-table-wrap">
         <table className="activity-log-table">
           <thead>

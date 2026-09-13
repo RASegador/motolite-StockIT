@@ -85,7 +85,7 @@ export default function DamageReportsView({ role, shopId, userId }) {
       <table>
         <thead>
           <tr>
-            {role === 'owner' && <th>Source store</th>}
+            {role === 'admin' && <th>Source store</th>}
             <th>Item</th><th>SKU</th><th>Qty</th><th>Reason</th><th>Receipt</th><th>Status</th><th>Actions</th>
           </tr>
         </thead>
@@ -98,7 +98,7 @@ export default function DamageReportsView({ role, shopId, userId }) {
             const shop = shops.find((s) => s.id === r.shopId);
             return (
               <tr key={r.id}>
-                {role === 'owner' && <td>{shop?.name || r.shopId}</td>}
+                {role === 'admin' && <td>{shop?.name || r.shopId}</td>}
                 <td>{r.itemName || item?.name || r.itemId}</td>
                 <td>{r.itemSku || item?.sku || '—'}</td>
                 <td>{r.quantity}</td>

@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2, ArrowUpCircle, PackagePlus, Eye, Battery } from 'lucide-react';
 import Tooltip from '../shared/Tooltip';
 import { useItems } from './useItems';
+import { useWarehouseItems } from '../restock/useWarehouseItems';
+import { useShops } from '../shops/useShops';
 import { deleteItem } from './inventoryActions';
 import { reorderThresholdInBase } from '../lib/units';
 import { currency } from '../lib/format';
 import { can } from '../lib/permissions';
-import { useCategories } from '../catalog/useCatalog';
+import { useCategories, useSuppliers } from '../catalog/useCatalog';
 import { db } from '../firebase';
 import ItemForm from './ItemForm';
 import ItemDetailView from './ItemDetailView';
@@ -29,8 +31,25 @@ const SORT_OPTIONS = [
 ];
 
 export default function InventoryList({ role, shopId, userId }) {
-  const items = useItems({ role, shopId });
+  // "Inventory & Restock Section Structure" spec: the Inventory Section IS
+  // the Warehouse — every item Admin adds lives there, and this is now
+  // the master list, not a merge of every store's stock. A Manager (or
+  // Warehouse-role login) still only sees their OWN assigned location via
+  // the plain useItems() call below — this warehouse-scoping only applies
+  // to the Admin ('admin') view. Both hooks are called unconditionally
+  // (rules of hooks) and only one's result is actually used.
+  const shops = useShops();
+  const warehouseShopIds = shops.filter((s) => s.type === 'warehouse').map((s) => s.id);
+  const ownItems = useItems({ role, shopId });
+  const warehouseItems = useWarehouseItems(role === 'admin' ? warehouseShopIds : []);
+  const items = role === 'admin' ? warehouseItems : ownItems;
   const categories = useCategories();
+  const suppliers = useSuppliers();
+  const supplierById = new Map(suppliers.map((s) => [s.id, s]));
+  function supplierNames(it) {
+    const names = (it.supplierIds || []).map((id) => supplierById.get(id)?.name).filter(Boolean);
+    return names.length ? names.join(', ') : '—';
+  }
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -60,6 +79,13 @@ export default function InventoryList({ role, shopId, userId }) {
 
   return (
     <div className="inventory-list">
+      {role === 'admin' && (
+        <p className="dashboard-activity-hint">
+          This is the Warehouse's master stock — every item Admin adds here becomes available for stores to
+          request in the Restock section. A store's own stock is separate and only changes through an approved
+          Restock/Transfer that store has received.
+        </p>
+      )}
       <div className="inventory-toolbar">
         <input className="inventory-search" placeholder="Search SKU, name, model, vehicle type…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
@@ -89,8 +115,8 @@ export default function InventoryList({ role, shopId, userId }) {
         <table className="inventory-table">
           <thead>
             <tr>
-              <th></th><th>Item</th><th>Category</th><th>Barcode</th>
-              <th>Qty</th><th>Price</th><th>Status</th><th>Actions</th>
+              <th></th><th>Item</th><th>Category</th><th>Supplier</th><th>Barcode</th>
+              <th>Qty</th><th>Unit</th><th>Price</th><th>Status</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -106,8 +132,10 @@ export default function InventoryList({ role, shopId, userId }) {
                     <div className="inventory-item-sku">{it.sku}</div>
                   </td>
                   <td>{it.category || '—'}</td>
+                  <td>{supplierNames(it)}</td>
                   <td className="inventory-barcode-cell">{it.barcode || '—'}</td>
                   <td>{it.quantity}</td>
+                  <td>{it.baseUnitName || 'Piece'}</td>
                   <td>{currency(it.sellingPrice)}</td>
                   <td><span className={`status-badge status-${status.key}`}>{status.label}</span></td>
                   <td>
@@ -143,7 +171,7 @@ export default function InventoryList({ role, shopId, userId }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="inventory-empty">No items match your filters.</td></tr>
+              <tr><td colSpan={10} className="inventory-empty">No items match your filters.</td></tr>
             )}
           </tbody>
         </table>

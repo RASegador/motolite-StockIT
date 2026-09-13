@@ -24,9 +24,19 @@ service cloud.firestore {
     function isActive() {
       return isSignedIn() && myProfile().get('active', true) != false;
     }
-    function isOwner() { return myRole() == 'owner' && isActive(); }
+    // "Manager Portal & Account Structure" spec: the role is now `admin`
+    // (renamed from `owner`) — `myRole() == 'owner'` stays here too so the
+    // one pre-existing account (its Firestore doc still literally says
+    // `role: 'owner'`, written before this rename) keeps working with no
+    // manual data migration; see src/lib/permissions.js's resolveRole()
+    // for the equivalent client-side mapping. Cashier is removed entirely.
+    // isCashier() is deliberately gone — a legacy Cashier account's
+    // myRole() still reads 'cashier', so every isAdmin()/isManager()/
+    // isWarehouse() check below already evaluates false for it, revoking
+    // every write it used to have with no separate "deny cashier" rule
+    // needed. See src/App.jsx for the client-side login block.
+    function isAdmin() { return (myRole() == 'admin' || myRole() == 'owner') && isActive(); }
     function isManager() { return myRole() == 'manager' && isActive(); }
-    function isCashier() { return myRole() == 'cashier' && isActive(); }
     // Warehouse staff (src/lib/permissions.js's `warehouse` role) — assigned
     // to one location (a `shops` doc, `type: 'warehouse'` or `'store'`; the
     // rules layer doesn't care which, only that it's THEIR assigned
@@ -34,8 +44,7 @@ service cloud.firestore {
     function isWarehouse() { return myRole() == 'warehouse' && isActive(); }
     // Manager-or-Warehouse: the two roles that operate day-to-day stock
     // movements (transfers, damage reports, restocks) for their own single
-    // assigned location, as opposed to Owner (every location) or Cashier
-    // (POS-only, no location-management actions).
+    // assigned location, as opposed to Admin/Owner (every location).
     function isLocationStaff() { return isManager() || isWarehouse(); }
     function sameShop(shopId) { return isSignedIn() && shopId == myShopId(); }
     // Safe field read off a `resource` for use in read/list rules. Two
@@ -71,21 +80,27 @@ service cloud.firestore {
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
-    // There is exactly one Owner account in this system (created once,
+    // There is exactly one Admin account in this system (created once,
     // out-of-band, by scripts/create-owner.js) — this blocks any write
     // through the app from ever creating or promoting a second one, even
-    // though isOwner() itself is otherwise allowed to write any `users`
-    // doc. It only fires when `role` is actually part of the write, so an
-    // Owner's own untouched `role: 'owner'` on their own doc never trips it.
+    // though isAdmin() itself is otherwise allowed to write any `users`
+    // doc. It only fires when `role` is actually part of the write, so the
+    // Admin's own untouched `role` on their own doc never trips it. Blocks
+    // both the new ('admin') and legacy ('owner') values.
     function roleWriteOk() {
       return !('role' in request.resource.data.diff(resource.data).affectedKeys()) ||
-        request.resource.data.role != 'owner';
+        (request.resource.data.role != 'admin' && request.resource.data.role != 'owner');
     }
 
     match /users/{uid} {
-      allow read: if isSignedIn() && (isOwner() || request.auth.uid == uid);
-      allow create: if isOwner() && request.resource.data.role != 'owner';
-      allow update: if (isOwner() && roleWriteOk()) ||
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == uid);
+      // Cashier is removed per the "Manager Portal & Account Structure"
+      // spec — blocked here too, not just hidden from UsersView's role
+      // dropdown, so a new Cashier account can never be created even via
+      // a direct API call.
+      allow create: if isAdmin() && request.resource.data.role != 'admin' &&
+        request.resource.data.role != 'owner' && request.resource.data.role != 'cashier';
+      allow update: if (isAdmin() && roleWriteOk()) ||
         (request.auth.uid == uid && onlyChanged(['fullName', 'phone'])) ||
         // First-login gate: the signed-in user may only ever flip this
         // true -> false on their own doc (never re-lock it, never touch
@@ -99,59 +114,60 @@ service cloud.firestore {
         (request.auth.uid == uid && onlyChanged(['username']) &&
           resource.data.get('username', null) == null &&
           request.resource.data.username is string && request.resource.data.username.size() > 0);
-      allow delete: if isOwner();
+      allow delete: if isAdmin();
     }
 
     match /shops/{shopId} {
       allow read: if isSignedIn();
-      allow write: if isOwner();
+      allow write: if isAdmin();
     }
 
     // "Inventory Permissions, Requests, and Receiving Workflow" spec: only
-    // the Owner has direct authority to add, edit, or manually adjust an
-    // item — Manager/Warehouse/Cashier only ever touch this collection as
-    // a side effect of the request workflow (initiateTransfer deducting
-    // the source item, confirmReceipt crediting/creating the destination
-    // item), which only ever changes quantity/unitStock (and, for a
-    // brand-new destination item, creates a doc carrying `sourceItemId` —
-    // see destItemId()/confirmReceipt in transferActions.js). Nothing
-    // else — item info edits (name, price, sku, category, shopId, ...) or
-    // an item's outright creation/deletion as a manual action — is ever
-    // permitted for a non-Owner, at the rules layer as well as the UI.
+    // Admin has direct authority to add, edit, or manually adjust an item —
+    // Manager/Warehouse only ever touch this collection as a side effect
+    // of the request workflow (initiateTransfer deducting the source item,
+    // confirmReceipt crediting/creating the destination item), which only
+    // ever changes quantity/unitStock (and, for a brand-new destination
+    // item, creates a doc carrying `sourceItemId` — see
+    // destItemId()/confirmReceipt in transferActions.js). Nothing else —
+    // item info edits (name, price, sku, category, shopId, ...) or an
+    // item's outright creation/deletion as a manual action — is ever
+    // permitted for a non-Admin, at the rules layer as well as the UI.
     match /items/{itemId} {
-      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId') ||
+      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId') ||
         (isLocationStaff() && isWarehouseShop(docField(resource, 'shopId'))));
-      allow create: if isOwner() ||
-        ((isLocationStaff() || isCashier()) && request.resource.data.shopId == myShopId() &&
+      allow create: if isAdmin() ||
+        (isLocationStaff() && request.resource.data.shopId == myShopId() &&
           request.resource.data.get('sourceItemId', null) != null);
-      allow update: if isOwner() ||
-        ((isLocationStaff() || isCashier()) && sameShopAsDoc(resource, 'shopId') &&
+      allow update: if isAdmin() ||
+        (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
           onlyChanged(['quantity', 'unitStock', 'reservedForReview']));
-      allow delete: if isOwner();
+      allow delete: if isAdmin();
     }
 
     match /movements/{movementId} {
-      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
-      allow create: if isOwner() || sameShop(request.resource.data.shopId);
-      allow update, delete: if isOwner();
+      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId'));
+      allow create: if isAdmin() || sameShop(request.resource.data.shopId);
+      allow update, delete: if isAdmin();
     }
 
     match /sales/{saleId} {
-      // Cancelling a sale is Owner/Admin-only per the spec's permission
-      // table (Shop Manager and Cashier both get "—" for Cancel sales) —
+      // Cancelling a sale is Admin-only per the spec's permission table —
       // unlike every other per-shop collection, this is NOT opened up to
-      // Manager.
-      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
-      allow create: if isOwner() ||
-        (isCashier() && sameShop(request.resource.data.shopId));
-      allow update: if isOwner();
-      allow delete: if isOwner();
+      // Manager. Creating one IS opened up to Manager: with Cashier
+      // removed, a Manager rings up POS sales at their own store directly
+      // (see permissions.js's `manager.pos: true`).
+      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId'));
+      allow create: if isAdmin() ||
+        (isManager() && sameShop(request.resource.data.shopId));
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /restocks/{restockId} {
-      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
-      allow create: if isOwner() || sameShop(request.resource.data.shopId);
-      allow update, delete: if isOwner();
+      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId'));
+      allow create: if isAdmin() || sameShop(request.resource.data.shopId);
+      allow update, delete: if isAdmin();
     }
 
     match /damageReports/{reportId} {
@@ -159,21 +175,21 @@ service cloud.firestore {
       // location's staff can see it arriving — never a substitute for the
       // immutable source `shopId`, which stays whatever it was reported
       // under regardless of where the item is sent next.
-      allow read: if isSignedIn() && (isOwner() ||
+      allow read: if isSignedIn() && (isAdmin() ||
         sameShopAsDoc(resource, 'shopId') || sameShopAsDoc(resource, 'destinationShopId'));
-      allow create: if isOwner() || sameShop(request.resource.data.shopId);
+      allow create: if isAdmin() || sameShop(request.resource.data.shopId);
       // The reporting location's own staff may only ever settle their own
       // still-pending report (approve or reject) — every later stage of
       // the chain (sendReportToWarehouse/markReportReceived/
       // resolveReportOutcome in src/damage/damageActions.js) is
       // Owner-only, run from the Admin Dashboard, since none of those
       // fields are in this onlyChanged() allowlist.
-      allow update: if isOwner() ||
+      allow update: if isAdmin() ||
         (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
           onlyChanged(['status', 'resolvedBy', 'resolvedAt']) &&
           resource.data.get('status', 'pending') == 'pending' &&
           (request.resource.data.status == 'approved' || request.resource.data.status == 'rejected'));
-      allow delete: if isOwner();
+      allow delete: if isAdmin();
     }
 
     match /transfers/{transferId} {
@@ -184,18 +200,16 @@ service cloud.firestore {
       // Warehouse<->Warehouse, Store<->Store) — the rule only cares that
       // the caller's own assigned location is the source (create) or
       // destination (confirm), never which `type` either location is.
-      allow read: if isSignedIn() && (isOwner() ||
+      allow read: if isSignedIn() && (isAdmin() ||
         sameShopAsDoc(resource, 'fromShopId') || sameShopAsDoc(resource, 'toShopId'));
-      allow create: if isOwner() ||
+      allow create: if isAdmin() ||
         (isLocationStaff() && sameShop(request.resource.data.fromShopId));
-      // Cashier can confirm receipt too now (spec: "receive and confirm
-      // approved restocks or branch transfers when permitted") — `notes`
-      // is the discrepancy reason, required by the UI whenever the
+      // `notes` is the discrepancy reason, required by the UI whenever the
       // confirmed quantity differs from what was shipped.
-      allow update: if isOwner() ||
-        ((isLocationStaff() || isCashier()) && sameShopAsDoc(resource, 'toShopId') &&
+      allow update: if isAdmin() ||
+        (isLocationStaff() && sameShopAsDoc(resource, 'toShopId') &&
           onlyChanged(['status', 'confirmedBy', 'confirmedAt', 'confirmedQuantity', 'notes']));
-      allow delete: if isOwner();
+      allow delete: if isAdmin();
     }
 
     match /restockRequests/{requestId} {
@@ -203,11 +217,11 @@ service cloud.firestore {
       // location) can read/create their own location's requests; Owner and
       // Warehouse staff can additionally read every request, since
       // reviewing (approve/reject/fulfill) is their job per the spec.
-      allow read: if isSignedIn() && (isOwner() || isWarehouse() ||
+      allow read: if isSignedIn() && (isAdmin() || isWarehouse() ||
         sameShopAsDoc(resource, 'requestingShopId'));
-      allow create: if isOwner() ||
+      allow create: if isAdmin() ||
         (isLocationStaff() && sameShop(request.resource.data.requestingShopId));
-      allow update: if isOwner() ||
+      allow update: if isAdmin() ||
         // Approve/reject a pending request — Owner/Warehouse-only.
         (isWarehouse() && onlyChanged(['status', 'reviewedBy', 'reviewedAt', 'transferId', 'fulfilledAt'])) ||
         // The requesting location's own Manager may cancel their own
@@ -216,17 +230,16 @@ service cloud.firestore {
           onlyChanged(['status']) && resource.data.get('status', 'pending') == 'pending' &&
           request.resource.data.status == 'cancelled') ||
         // Closing the loop: whoever confirms the linked Transfer In (the
-        // requesting location's own staff — Manager or Cashier for a
-        // store, Warehouse for a warehouse-to-warehouse request) may flip
-        // an already-approved request straight to 'fulfilled'. See
-        // confirmReceipt() in src/transfers/transferActions.js, which
-        // makes exactly this write right after the matching transfer is
-        // confirmed received.
-        ((isLocationStaff() || isCashier()) && sameShopAsDoc(resource, 'requestingShopId') &&
+        // requesting location's own staff — Manager for a store, Warehouse
+        // for a warehouse-to-warehouse request) may flip an already-
+        // approved request straight to 'fulfilled'. See confirmReceipt()
+        // in src/transfers/transferActions.js, which makes exactly this
+        // write right after the matching transfer is confirmed received.
+        (isLocationStaff() && sameShopAsDoc(resource, 'requestingShopId') &&
           onlyChanged(['status', 'fulfilledAt']) &&
           resource.data.get('status', 'pending') == 'approved' &&
           request.resource.data.status == 'fulfilled');
-      allow delete: if isOwner();
+      allow delete: if isAdmin();
     }
 
     // Public, customer-safe mirrors reached by scanning a product QR code or
@@ -237,29 +250,32 @@ service cloud.firestore {
     // buildPublicReceipt in src/lib/receipts.js) — never the full document.
     match /productPublic/{itemId} {
       allow read: if true;
-      allow write: if isOwner() || isManager();
+      allow write: if isAdmin() || isManager();
     }
     match /receiptsPublic/{token} {
       allow read: if true;
       // Created by the same roles that can create a `sales` doc; the only
       // update ever made afterward is cancelSale() flipping `cancelled`,
-      // which is Owner-only, mirroring the `sales` collection's own rules.
-      allow create: if isOwner() || isCashier();
-      allow update: if isOwner();
+      // which is Admin-only, mirroring the `sales` collection's own rules.
+      allow create: if isAdmin() || isManager();
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
+    // "Manager Portal & Account Structure" spec: Categories/Suppliers/
+    // Locations are now Admin-only — a Manager can view them (needed for
+    // e.g. the Category filter on Inventory) but never create or edit one.
     match /categories/{id} {
       allow read: if isSignedIn();
-      allow write: if isOwner() || isManager();
+      allow write: if isAdmin();
     }
     match /locations/{id} {
       allow read: if isSignedIn();
-      allow write: if isOwner() || isManager();
+      allow write: if isAdmin();
     }
     match /suppliers/{id} {
       allow read: if isSignedIn();
-      allow write: if isOwner() || isManager();
+      allow write: if isAdmin();
     }
   }
 }

@@ -49,8 +49,8 @@ export async function setUserActive(dbOrUid, uidOrActive, maybeActive) {
 // true`; App.jsx blocks access to the rest of the system until that OTP is
 // replaced with a personal password (see completeFirstLogin below).
 export async function createUser({ username, fullName, role, shopId }) {
-  if (role === 'owner') {
-    throw new Error('A new Owner account cannot be created here — there can only be one Owner.');
+  if (role === 'owner' || role === 'admin') {
+    throw new Error('A new Admin account cannot be created here — there can only be one Admin.');
   }
   const cleanUsername = (username || '').trim().toLowerCase();
   if (!isValidUsername(cleanUsername)) {

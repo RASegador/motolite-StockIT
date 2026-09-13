@@ -86,7 +86,14 @@ export default function ItemForm({ item, shopId, role, userId, onDone }) {
   // shop fixed (their own shop, or the item's existing one) rather than
   // editable, to avoid overlapping with the dedicated Transfers feature.
   const isNewItem = !item;
-  const canPickShop = isNewItem && role === 'owner';
+  const canPickShop = isNewItem && role === 'admin';
+  // "Inventory & Restock Section Structure" spec: every item Admin adds is
+  // Warehouse Inventory — so a brand-new item can only be assigned to a
+  // warehouse-type shop, never directly to a store. Stores get stock only
+  // through the Restock/Transfer + Receive workflow (see
+  // WarehouseRestockModal.jsx / RestockView.jsx), never by an item being
+  // created there directly.
+  const warehouseShops = shops.filter((s) => s.type === 'warehouse');
   const [draft, setDraft] = useState(
     item ? draftFromItem(item) : { ...blankDraft(), shopId: shopId || '' }
   );
@@ -168,27 +175,40 @@ export default function ItemForm({ item, shopId, role, userId, onDone }) {
             {locations.map((l) => <option key={l.id} value={l.name}>{l.name}</option>)}
           </select>
         </Field>
+        <Field label="Supplier">
+          <select value={draft.supplierIds?.[0] || ''} onChange={(e) => setDraft({ ...draft, supplierIds: e.target.value ? [e.target.value] : [] })}>
+            <option value="">Supplier…</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </Field>
       </Section>
 
       <div className="item-form-section">
-        <h4 className="item-form-section-title">Shop</h4>
+        <h4 className="item-form-section-title">Warehouse</h4>
         {canPickShop ? (
           <div className="item-form-grid">
-            <Field label="Shop" className="item-form-shop-field">
-              <select value={draft.shopId || ''} onChange={set('shopId')} required>
-                <option value="">Select a shop…</option>
-                {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <Field label="Warehouse" className="item-form-shop-field">
+              <select value={draft.shopId || ''} onChange={set('shopId')} required disabled={warehouseShops.length === 0}>
+                <option value="">Select a warehouse…</option>
+                {warehouseShops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>
-            {draft.shopId && (
+            {warehouseShops.length === 0 ? (
               <p className="item-form-shop-confirm">
-                This item will be added to <strong>{selectedShopName || draft.shopId}</strong>.
+                No warehouse exists yet — create one in Shops before adding inventory.
               </p>
+            ) : (
+              draft.shopId && (
+                <p className="item-form-shop-confirm">
+                  This becomes Warehouse Inventory at <strong>{selectedShopName || draft.shopId}</strong> — stores
+                  request it from there via a Restock Request, they never get their own copy created directly.
+                </p>
+              )
             )}
           </div>
         ) : (
           <p className="item-form-shop-confirm">
-            {selectedShopName ? <>Shop: <strong>{selectedShopName}</strong></> : 'Shop: —'}
+            {selectedShopName ? <>Warehouse: <strong>{selectedShopName}</strong></> : 'Shop: —'}
           </p>
         )}
       </div>

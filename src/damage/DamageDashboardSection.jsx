@@ -34,7 +34,7 @@ function statusBadgeClass(status) {
 // covering the "regardless of where the item is currently located" half
 // of the spec.
 export default function DamageDashboardSection({ userId: actorId }) {
-  const reports = useDamageReports({ role: 'owner' });
+  const reports = useDamageReports({ role: 'admin' });
   const shops = useShops();
   const users = useUsers();
 

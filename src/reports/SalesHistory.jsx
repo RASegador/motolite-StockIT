@@ -10,7 +10,7 @@ import ReceiptView from '../pos/Receipt';
 import RefundModal from '../pos/RefundModal';
 import Tooltip from '../shared/Tooltip';
 
-// Owner/Admin sees every shop's sales (role === 'owner' already makes
+// Admin sees every shop's sales (role === 'admin' already makes
 // useSales fetch everything); a Cashier sees only their own — filtered
 // here rather than in useSales, since "my sales" isn't a shop-scoping
 // concern, it's a per-cashier one on top of the shop scope already
@@ -78,7 +78,7 @@ export default function SalesHistory({ role, shopId, userId }) {
         <ReceiptView
           sale={viewingSale}
           shopName={shops.find((sh) => sh.id === viewingSale.shopId)?.name || ''}
-          copyLabel={role === 'cashier' ? 'Customer Copy' : 'Owner Copy'}
+          copyLabel={role === 'cashier' ? 'Customer Copy' : 'Store Copy'}
           onClose={() => setViewingSale(null)}
         />
       )}

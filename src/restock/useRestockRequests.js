@@ -8,7 +8,7 @@ import { db } from '../firebase';
 export function useRestockRequests({ role, shopId }) {
   const [requests, setRequests] = useState([]);
   useEffect(() => {
-    const q = (role === 'owner' || role === 'warehouse')
+    const q = (role === 'admin' || role === 'warehouse')
       ? query(collection(db, 'restockRequests'), orderBy('createdAt', 'desc'))
       : query(collection(db, 'restockRequests'), where('requestingShopId', '==', shopId), orderBy('createdAt', 'desc'));
     return onSnapshot(q, (snap) => setRequests(snap.docs.map((d) => d.data())), () => setRequests([]));
