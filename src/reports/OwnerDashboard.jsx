@@ -4,6 +4,7 @@ import { useItems } from '../inventory/useItems';
 import { useSales } from './useSales';
 import { useMovementsLog } from './useMovementsLog';
 import { useDamageReports } from '../damage/useDamageReports';
+import DamageDashboardSection from '../damage/DamageDashboardSection';
 import { useTransfers } from '../transfers/useTransfers';
 import { useRestockRequests } from '../restock/useRestockRequests';
 import { computeRestockAlerts } from '../restock/restockAlerts';
@@ -14,7 +15,7 @@ import { buildActivityFeed, activityLabel } from './activityFeed';
 import { exportSalesReportPdf, exportInventoryReportPdf } from './pdfExport';
 import { currency } from '../lib/format';
 
-export default function OwnerDashboard() {
+export default function OwnerDashboard({ userId }) {
   const items = useItems({ role: 'owner' });
   const sales = useSales({ role: 'owner' });
   const movements = useMovementsLog({ role: 'owner' });
@@ -172,6 +173,8 @@ export default function OwnerDashboard() {
           })}
         </tbody>
       </table>
+
+      <DamageDashboardSection userId={userId} />
 
       <h3>Recent activity</h3>
       <p className="dashboard-activity-hint">

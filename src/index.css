@@ -520,4 +520,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .transfer-error { color: #c1272d; font-size: 13px; margin: 0 0 10px; }
 .transfer-receive-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .transfer-discrepancy-note { color: #c1272d; font-size: 12px; margin-top: 2px; }
+
+/* src/restock/WarehouseRestockModal.jsx */
+.warehouse-restock-modal .modal-card { max-width: 720px; }
+.warehouse-restock-table-wrap { max-height: 320px; overflow-y: auto; margin: 10px 0; }
+
+/* src/damage/DamageDashboardSection.jsx */
+.damage-history-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.damage-history-list li strong { margin-right: 4px; }
+.damage-history-action { border-top: 1px solid #eee; padding-top: 12px; margin-top: 12px; }
 .public-page-loading, .public-page-error { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #666; text-align: center; padding: 24px; }

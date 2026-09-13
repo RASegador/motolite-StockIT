@@ -77,7 +77,7 @@ export default function App() {
   // profile's fullName is what actually belongs on a printed receipt;
   // user.email only remains as a fallback for the original Owner account.
   function defaultView() {
-    if (role === 'owner') return <OwnerDashboard />;
+    if (role === 'owner') return <OwnerDashboard userId={user.uid} />;
     if (can(role, 'viewReports')) return <ShopReports shopId={shopId} shopName={shopName} />;
     // Cashier has neither viewReports nor a shop-reports screen of their
     // own — land them on POS instead of a screen they can't see.

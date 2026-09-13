@@ -59,6 +59,15 @@ service cloud.firestore {
     function sameShopAsDoc(res, key) {
       return isSignedIn() && docField(res, key) == myShopId();
     }
+    // Lets a store Manager (or Warehouse staff) browse what's actually
+    // sitting in a warehouse before creating a Restock Request — see
+    // src/restock/useWarehouseItems.js / WarehouseRestockModal.jsx.
+    // Read-only: this never appears in the `items` UPDATE rule below, so
+    // it grants no write access to warehouse stock.
+    function isWarehouseShop(shopId) {
+      return shopId != null &&
+        get(/databases/$(database)/documents/shops/$(shopId)).data.get('type', '') == 'warehouse';
+    }
     function onlyChanged(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
@@ -110,7 +119,8 @@ service cloud.firestore {
     // an item's outright creation/deletion as a manual action — is ever
     // permitted for a non-Owner, at the rules layer as well as the UI.
     match /items/{itemId} {
-      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
+      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId') ||
+        (isLocationStaff() && isWarehouseShop(docField(resource, 'shopId'))));
       allow create: if isOwner() ||
         ((isLocationStaff() || isCashier()) && request.resource.data.shopId == myShopId() &&
           request.resource.data.get('sourceItemId', null) != null);
@@ -145,11 +155,24 @@ service cloud.firestore {
     }
 
     match /damageReports/{reportId} {
-      allow read: if isSignedIn() && (isOwner() || sameShopAsDoc(resource, 'shopId'));
+      // Also readable at the destination (once sent onward) so that
+      // location's staff can see it arriving — never a substitute for the
+      // immutable source `shopId`, which stays whatever it was reported
+      // under regardless of where the item is sent next.
+      allow read: if isSignedIn() && (isOwner() ||
+        sameShopAsDoc(resource, 'shopId') || sameShopAsDoc(resource, 'destinationShopId'));
       allow create: if isOwner() || sameShop(request.resource.data.shopId);
+      // The reporting location's own staff may only ever settle their own
+      // still-pending report (approve or reject) — every later stage of
+      // the chain (sendReportToWarehouse/markReportReceived/
+      // resolveReportOutcome in src/damage/damageActions.js) is
+      // Owner-only, run from the Admin Dashboard, since none of those
+      // fields are in this onlyChanged() allowlist.
       allow update: if isOwner() ||
         (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
-          onlyChanged(['status', 'resolvedBy', 'resolvedAt']));
+          onlyChanged(['status', 'resolvedBy', 'resolvedAt']) &&
+          resource.data.get('status', 'pending') == 'pending' &&
+          (request.resource.data.status == 'approved' || request.resource.data.status == 'rejected'));
       allow delete: if isOwner();
     }
 

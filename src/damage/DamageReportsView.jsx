@@ -2,17 +2,19 @@ import { useState } from 'react';
 import { AlertTriangle, Plus } from 'lucide-react';
 import { useDamageReports } from './useDamageReports';
 import { useItems } from '../inventory/useItems';
+import { useShops } from '../shops/useShops';
 import { reportDamage, approveDamage, rejectDamage } from './damageActions';
 import { can } from '../lib/permissions';
 import { db } from '../firebase';
 import Modal from '../shared/Modal';
 
 const REASONS = ['damaged', 'returned', 'defective'];
-const BLANK_FORM = { itemId: '', quantity: 1, reason: 'damaged' };
+const BLANK_FORM = { itemId: '', quantity: 1, reason: 'damaged', relatedReceipt: '' };
 
 export default function DamageReportsView({ role, shopId, userId }) {
   const reports = useDamageReports({ role, shopId });
   const items = useItems({ role, shopId });
+  const shops = useShops();
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [error, setError] = useState('');
@@ -22,7 +24,8 @@ export default function DamageReportsView({ role, shopId, userId }) {
     setError('');
     try {
       await reportDamage(db, {
-        itemId: form.itemId, shopId, quantity: Number(form.quantity), reason: form.reason, reportedBy: userId,
+        itemId: form.itemId, shopId, quantity: Number(form.quantity), reason: form.reason,
+        reportedBy: userId, relatedReceipt: form.relatedReceipt,
       });
       setForm(BLANK_FORM);
       setShowAddForm(false);
@@ -64,6 +67,11 @@ export default function DamageReportsView({ role, shopId, userId }) {
                   {REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </label>
+              <label className="item-form-field">
+                <span className="item-form-field-label">Related transaction/receipt</span>
+                <input placeholder="Receipt/sale ID (optional)" value={form.relatedReceipt}
+                  onChange={(e) => setForm({ ...form, relatedReceipt: e.target.value })} />
+              </label>
             </div>
             {error && <p className="modal-error">{error}</p>}
             <div className="form-actions">
@@ -76,16 +84,26 @@ export default function DamageReportsView({ role, shopId, userId }) {
 
       <table>
         <thead>
-          <tr><th>Item</th><th>Qty</th><th>Reason</th><th>Status</th><th>Actions</th></tr>
+          <tr>
+            {role === 'owner' && <th>Source store</th>}
+            <th>Item</th><th>SKU</th><th>Qty</th><th>Reason</th><th>Receipt</th><th>Status</th><th>Actions</th>
+          </tr>
         </thead>
         <tbody>
           {reports.map((r) => {
+            // Denormalized itemSku/itemName (see damageActions.js) is the
+            // source of truth — the `items` lookup is only a fallback for
+            // reports created before that field existed.
             const item = items.find((it) => it.id === r.itemId);
+            const shop = shops.find((s) => s.id === r.shopId);
             return (
               <tr key={r.id}>
-                <td>{item?.sku || r.itemId}</td>
+                {role === 'owner' && <td>{shop?.name || r.shopId}</td>}
+                <td>{r.itemName || item?.name || r.itemId}</td>
+                <td>{r.itemSku || item?.sku || '—'}</td>
                 <td>{r.quantity}</td>
                 <td>{r.reason}</td>
+                <td>{r.relatedReceipt || '—'}</td>
                 <td>{r.status}</td>
                 <td>
                   {r.status === 'pending' && can(role, 'approveDamage') && (

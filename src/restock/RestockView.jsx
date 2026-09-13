@@ -7,6 +7,7 @@ import { computeRestockAlerts } from './restockAlerts';
 import { createRestockRequest, rejectRestockRequest, cancelRestockRequest } from './restockRequestActions';
 import { STATUS_LABELS, statusBadgeClass } from './restockStatus';
 import ApproveRestockRequestModal from './ApproveRestockRequestModal';
+import WarehouseRestockModal from './WarehouseRestockModal';
 import { can } from '../lib/permissions';
 import { db } from '../firebase';
 import Modal from '../shared/Modal';
@@ -77,6 +78,7 @@ export default function RestockView({ role, shopId, userId }) {
   // even though they review requests system-wide.
   const allItems = useItems(role === 'owner' ? { role: 'owner' } : { role, shopId });
   const shops = useShops();
+  const warehouseShopIds = shops.filter((s) => s.type === 'warehouse').map((s) => s.id);
   const requests = useRestockRequests({ role, shopId });
 
   const [creatingFor, setCreatingFor] = useState(undefined); // undefined = closed, null = blank form, {itemId,...} = prefilled
@@ -180,7 +182,18 @@ export default function RestockView({ role, shopId, userId }) {
         </table>
       </div>
 
-      {creatingFor !== undefined && (
+      {/* Plain "New restock request" (creatingFor === null) opens the
+          full warehouse browser (WarehouseRestockModal) — the per-item
+          "Create request" link on a low-stock alert row (creatingFor is
+          the alert object) keeps the older quick single-item form, since
+          that flow already knows exactly which item/quantity to suggest. */}
+      {creatingFor === null && (
+        <WarehouseRestockModal
+          shopId={shopId} userId={userId} warehouseShopIds={warehouseShopIds}
+          onClose={() => setCreatingFor(undefined)} onDone={() => setCreatingFor(undefined)}
+        />
+      )}
+      {creatingFor !== undefined && creatingFor !== null && (
         <CreateRequestModal
           shopId={shopId} userId={userId} items={items} prefill={creatingFor}
           onClose={() => setCreatingFor(undefined)} onDone={() => setCreatingFor(undefined)}
