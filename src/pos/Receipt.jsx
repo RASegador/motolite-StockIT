@@ -105,6 +105,7 @@ export default function Receipt({ sale, shopName, copyLabel = 'Customer Copy', o
                 {r.items.map((ri) => (
                   <p key={ri.lineId} className="receipt-meta">{ri.sku} × {ri.qty} {ri.unitName} — -{currency(ri.amount)}</p>
                 ))}
+                {r.reason && <p className="receipt-meta receipt-refund-reason">Reason: {r.reason}</p>}
               </div>
             ))}
             <p className="receipt-meta">Refunded: -{currency(sale.refundedAmount)}</p>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, ArrowUpCircle, PackagePlus, Eye, Battery, Download, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUpCircle, PackagePlus, Eye, Battery, Download, Upload, Printer } from 'lucide-react';
+import { printLabelSheet } from '../barcode/bulkPrint';
 import Tooltip from '../shared/Tooltip';
 import { useItems } from './useItems';
 import { useWarehouseItems } from '../restock/useWarehouseItems';
@@ -62,6 +63,11 @@ export default function InventoryList({ role, shopId, userId }) {
   const [restockingItem, setRestockingItem] = useState(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  // Bulk label printing (see src/barcode/bulkPrint.js): which items are
+  // checked, keyed by id so it survives re-sorting/re-filtering without
+  // getting confused about row identity.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [printing, setPrinting] = useState(false);
 
   const q = search.trim().toLowerCase();
   let filtered = items.filter((it) => {
@@ -104,6 +110,39 @@ export default function InventoryList({ role, shopId, userId }) {
     URL.revokeObjectURL(url);
   }
 
+  const selectedItems = filtered.filter((it) => selectedIds.has(it.id));
+  const allFilteredSelected = filtered.length > 0 && filtered.every((it) => selectedIds.has(it.id));
+
+  function toggleOne(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllFiltered() {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev);
+        filtered.forEach((it) => next.delete(it.id));
+        return next;
+      }
+      const next = new Set(prev);
+      filtered.forEach((it) => next.add(it.id));
+      return next;
+    });
+  }
+
+  async function handlePrintLabels() {
+    setPrinting(true);
+    try {
+      await printLabelSheet(selectedItems, window.location.origin);
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   return (
     <div className="inventory-list">
       {role === 'admin' && (
@@ -134,6 +173,15 @@ export default function InventoryList({ role, shopId, userId }) {
             warehouse master list) — only creating/importing is gated on
             editInventory. */}
         <button className="btn-secondary" onClick={handleExport}><Download size={16} /> Export CSV</button>
+        {/* Same read-only availability as Export CSV above — printing a
+            barcode/QR label doesn't change anything, so anyone who can see
+            this list can print from it. Disabled (not hidden) with 0
+            selected, since the checkboxes it depends on are always visible. */}
+        <Tooltip label={selectedItems.length === 0 ? 'Check one or more items below first' : `Print a label for ${selectedItems.length} selected item${selectedItems.length === 1 ? '' : 's'}`}>
+          <button className="btn-secondary" onClick={handlePrintLabels} disabled={selectedItems.length === 0 || printing}>
+            <Printer size={16} /> {printing ? 'Preparing…' : `Print labels${selectedItems.length ? ` (${selectedItems.length})` : ''}`}
+          </button>
+        </Tooltip>
         {can(role, 'editInventory') && (
           <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={16} /> Import CSV</button>
         )}
@@ -150,6 +198,13 @@ export default function InventoryList({ role, shopId, userId }) {
         <table className="inventory-table">
           <thead>
             <tr>
+              <th>
+                <input
+                  type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered}
+                  aria-label="Select all items currently shown, for label printing"
+                  disabled={filtered.length === 0}
+                />
+              </th>
               <th></th><th>Item</th><th>Category</th><th>Supplier</th><th>Barcode</th>
               <th>Qty</th><th>Unit</th><th>Price</th><th>Status</th><th>Actions</th>
             </tr>
@@ -159,6 +214,12 @@ export default function InventoryList({ role, shopId, userId }) {
               const status = stockStatus(it);
               return (
                 <tr key={it.id}>
+                  <td>
+                    <input
+                      type="checkbox" checked={selectedIds.has(it.id)} onChange={() => toggleOne(it.id)}
+                      aria-label={`Select ${it.name || it.sku} for label printing`}
+                    />
+                  </td>
                   <td>
                     <div className="inventory-thumb"><Battery size={20} /></div>
                   </td>
@@ -206,7 +267,7 @@ export default function InventoryList({ role, shopId, userId }) {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={10} className="inventory-empty">No items match your filters.</td></tr>
+              <tr><td colSpan={11} className="inventory-empty">No items match your filters.</td></tr>
             )}
           </tbody>
         </table>

@@ -3,6 +3,7 @@ import { Download, Printer } from 'lucide-react';
 import BarcodeImage from './BarcodeImage';
 import QRCodeImage from './QRCodeImage';
 import { productUrl } from '../lib/receipts';
+import { escapeHtml } from '../lib/html';
 
 function downloadCanvas(canvas, filename) {
   if (!canvas) return;
@@ -26,15 +27,15 @@ export default function ProductCodes({ item }) {
     const win = window.open('', '_blank', 'width=420,height=520');
     if (!win) return;
     win.document.write(`
-      <html><head><title>${item.sku || item.name || 'Product'} — Codes</title>
+      <html><head><title>${escapeHtml(item.sku || item.name || 'Product')} — Codes</title>
       <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 24px; }
         h3 { margin: 0 0 4px; }
         p { margin: 0 0 16px; color: #666; font-size: 13px; }
         img { display: block; margin: 0 auto 24px; }
       </style></head><body>
-        <h3>${item.name || ''}</h3>
-        <p>${item.sku || ''}</p>
+        <h3>${escapeHtml(item.name || '')}</h3>
+        <p>${escapeHtml(item.sku || '')}</p>
         <img src="${barcodeRef.current?.toDataURL('image/png') || ''}" alt="Barcode" />
         <img src="${qrRef.current?.toDataURL('image/png') || ''}" alt="QR Code" width="140" height="140" />
       </body></html>

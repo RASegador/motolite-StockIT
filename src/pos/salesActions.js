@@ -206,6 +206,31 @@ export async function cancelSale(db, sale, { actorId } = {}) {
   });
 }
 
+// Sales rung up before partial-refund support existed have no `lineId` on
+// their `items` — refundSaleItems() below keys everything off `lineId`, so
+// those old sales previously couldn't be refunded here at all (RefundModal
+// showed "This sale predates refund support"). Rather than build and
+// maintain a second, lineId-less refund code path, this does a one-time,
+// additive backfill: assign each old line a fresh lineId, same as if the
+// sale had been rung up after this feature existed. Nothing about the
+// sale's totals/history changes — refunds/refundedAmount/refundedProfit are
+// untouched — so this is safe to run lazily, on-demand, the first time
+// someone tries to refund one of these sales (see RefundModal). Returns the
+// sale unchanged (no write) if every line already has a lineId.
+export async function backfillLineIds(db, sale) {
+  if (!sale?.items?.length || sale.items.every((l) => l.lineId)) return sale;
+  return runTransaction(db, async (transaction) => {
+    const saleRef = doc(db, 'sales', sale.id);
+    const saleSnap = await transaction.get(saleRef);
+    if (!saleSnap.exists()) throw new Error('Sale not found');
+    const data = saleSnap.data();
+    if (!data.items?.length || data.items.every((l) => l.lineId)) return data;
+    const items = data.items.map((l) => (l.lineId ? l : { ...l, lineId: newId('sl') }));
+    transaction.set(saleRef, { items }, { merge: true });
+    return { ...data, items };
+  });
+}
+
 // A partial return — one or more individual line items (and quantities)
 // from an otherwise-completed sale, as opposed to cancelSale() voiding the
 // whole transaction. Unlike cancelSale, the sale's own `total`/

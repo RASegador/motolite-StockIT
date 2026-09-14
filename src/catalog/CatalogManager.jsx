@@ -1,11 +1,67 @@
 import { useState } from 'react';
-import { Tag, MapPin, Truck, Plus } from 'lucide-react';
+import { Tag, MapPin, Truck, Plus, Pencil } from 'lucide-react';
 import { useCategories, useLocations, useSuppliers } from './useCatalog';
-import { addCategory, deleteCategory, addLocation, deleteLocation, addSupplier, deleteSupplier } from './catalogActions';
+import {
+  addCategory, deleteCategory, renameCategory,
+  addLocation, deleteLocation, renameLocation,
+  addSupplier, deleteSupplier, renameSupplier,
+} from './catalogActions';
 import { db } from '../firebase';
 import Modal from '../shared/Modal';
 
-function ListEditor({ icon, title, rows, onAdd, onRemove, renderLabel }) {
+// One row, with its own local edit-mode toggle so renaming one row doesn't
+// disturb the rest of the list.
+function ListRow({ row, renderLabel, onRename, onRemove, setListError }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(row.name);
+  const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    setValue(row.name);
+    setEditing(true);
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setSaving(true);
+    setListError('');
+    try {
+      await onRename(row, value);
+      setEditing(false);
+    } catch (err) {
+      setListError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="list-row">
+        <form onSubmit={handleSave} className="list-row-rename-form">
+          <input value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+          <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          <button type="button" className="btn-secondary" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+        </form>
+      </li>
+    );
+  }
+
+  return (
+    <li className="list-row">
+      <span>{renderLabel ? renderLabel(row) : row.name}</span>
+      <div className="list-row-actions">
+        <button className="icon-button" onClick={startEdit} aria-label="Rename"><Pencil size={14} /></button>
+        <button className="btn-danger" onClick={async () => {
+          setListError('');
+          try { await onRemove(row); } catch (err) { setListError(err.message); }
+        }}>Remove</button>
+      </div>
+    </li>
+  );
+}
+
+function ListEditor({ icon, title, rows, onAdd, onRemove, onRename, renderLabel }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
@@ -50,14 +106,7 @@ function ListEditor({ icon, title, rows, onAdd, onRemove, renderLabel }) {
 
       <ul>
         {rows.map((row) => (
-          <li key={row.id} className="list-row">
-            <span>{renderLabel ? renderLabel(row) : row.name}</span>
-            <div className="list-row-actions">
-              <button className="btn-danger" onClick={async () => {
-                try { await onRemove(row.name); } catch (err) { setError(err.message); }
-              }}>Remove</button>
-            </div>
-          </li>
+          <ListRow key={row.id} row={row} renderLabel={renderLabel} onRename={onRename} onRemove={onRemove} setListError={setError} />
         ))}
       </ul>
     </div>
@@ -72,14 +121,18 @@ export default function CatalogManager() {
   return (
     <div className="catalog-manager">
       <ListEditor icon={<Tag size={16} />} title="Categories" rows={categories}
-        onAdd={(name) => addCategory(db, name)} onRemove={(name) => deleteCategory(db, name)} />
+        onAdd={(name) => addCategory(db, name)}
+        onRemove={(row) => deleteCategory(db, row.name)}
+        onRename={(row, newName) => renameCategory(db, row.name, newName)} />
       <ListEditor icon={<MapPin size={16} />} title="Locations" rows={locations}
-        onAdd={(name) => addLocation(db, name)} onRemove={(name) => deleteLocation(db, name)} />
+        onAdd={(name) => addLocation(db, name)}
+        onRemove={(row) => deleteLocation(db, row.name)}
+        onRename={(row, newName) => renameLocation(db, row.name, newName)} />
       <ListEditor icon={<Truck size={16} />} title="Suppliers" rows={suppliers}
-        onAdd={(name) => addSupplier(db, { name })} onRemove={(name) => {
-          const match = suppliers.find((s) => s.name === name);
-          if (match) return deleteSupplier(db, match.id);
-        }} renderLabel={(row) => row.name} />
+        onAdd={(name) => addSupplier(db, { name })}
+        onRemove={(row) => deleteSupplier(db, row.id)}
+        onRename={(row, newName) => renameSupplier(db, row.id, newName)}
+        renderLabel={(row) => row.name} />
     </div>
   );
 }

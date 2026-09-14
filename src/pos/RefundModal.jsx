@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { refundSaleItems } from './salesActions';
+import { useEffect, useState } from 'react';
+import { refundSaleItems, backfillLineIds } from './salesActions';
 import { db } from '../firebase';
 import { currency } from '../lib/format';
 import Modal from '../shared/Modal';
@@ -14,14 +14,35 @@ function remainingQty(sale, line) {
   return line.qty - refundedSoFar;
 }
 
-export default function RefundModal({ sale, userId, onClose, onDone }) {
+export default function RefundModal({ sale: saleProp, userId, onClose, onDone }) {
+  // Sales from before partial-refund support existed have no `lineId` on
+  // their items. Rather than permanently refuse to refund those (the old
+  // behavior), backfill one in on open — see salesActions.js's
+  // backfillLineIds for why that's safe — and use the (possibly updated)
+  // result from here on. `sale` starts as the prop and is swapped for the
+  // backfilled version once/if that finishes; `backfilling` guards the rest
+  // of the modal from rendering against half-migrated data in between.
+  const [sale, setSale] = useState(saleProp);
+  const [backfilling, setBackfilling] = useState(() => (saleProp.items || []).some((l) => !l.lineId));
+  const [backfillError, setBackfillError] = useState('');
   const [qtyByLine, setQtyByLine] = useState({});
+  const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Sales from before refund support existed have no `lineId` on their
-  // items — nothing here is refundable for those, same limitation
-  // refundSaleItems() itself enforces server-side.
+  useEffect(() => {
+    if (!backfilling) return;
+    let cancelled = false;
+    backfillLineIds(db, saleProp)
+      .then((updated) => { if (!cancelled) { setSale(updated); setBackfilling(false); } })
+      .catch((err) => { if (!cancelled) { setBackfillError(err.message); setBackfilling(false); } });
+    return () => { cancelled = true; };
+    // Intentionally runs once per mount (a fresh RefundModal per sale, per
+    // SalesHistory's key={s.id}-less usage) — not re-keyed on saleProp
+    // identity, which can change every render if the caller doesn't memoize it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const lines = (sale.items || [])
     .filter((line) => line.lineId)
     .map((line) => ({ ...line, remaining: remainingQty(sale, line) }))
@@ -46,7 +67,7 @@ export default function RefundModal({ sale, userId, onClose, onDone }) {
     }
     setSaving(true);
     try {
-      await refundSaleItems(db, sale, refundLines, { refundedBy: userId });
+      await refundSaleItems(db, sale, refundLines, { refundedBy: userId, reason: reason.trim() });
       onDone?.();
     } catch (err) {
       setError(err.message);
@@ -55,14 +76,29 @@ export default function RefundModal({ sale, userId, onClose, onDone }) {
     }
   }
 
+  if (backfilling) {
+    return (
+      <Modal title={`Refund — ${sale.receiptNo}`} onClose={onClose} dirty={false}>
+        <p>Preparing this sale for refund…</p>
+      </Modal>
+    );
+  }
+
+  if (backfillError) {
+    return (
+      <Modal title={`Refund — ${sale.receiptNo}`} onClose={onClose} dirty={false}>
+        <p className="modal-error">{backfillError}</p>
+        <div className="form-actions">
+          <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
+        </div>
+      </Modal>
+    );
+  }
+
   if (lines.length === 0) {
     return (
       <Modal title={`Refund — ${sale.receiptNo}`} onClose={onClose} dirty={false}>
-        <p>
-          {sale.items?.some((l) => !l.lineId)
-            ? "This sale predates refund support, so nothing on it can be refunded here."
-            : 'Everything on this sale has already been refunded.'}
-        </p>
+        <p>Everything on this sale has already been refunded.</p>
         <div className="form-actions">
           <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
         </div>
@@ -91,6 +127,13 @@ export default function RefundModal({ sale, userId, onClose, onDone }) {
             </label>
           ))}
         </div>
+        <label className="item-form-field">
+          <span className="item-form-field-label">Reason / notes (optional)</span>
+          <input
+            type="text" value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Customer changed their mind, defective unit…"
+          />
+        </label>
         <p className="item-form-price-preview">Refund total: {currency(refundTotal)}</p>
         {error && <p className="modal-error">{error}</p>}
         <div className="form-actions">

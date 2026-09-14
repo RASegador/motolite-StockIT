@@ -7,6 +7,7 @@ import { db } from '../firebase';
 import { newId } from '../lib/format';
 import { generateBarcode } from '../lib/barcode';
 import { generateSku } from '../lib/sku';
+import { validateUnits } from './itemFormValidation';
 import ProductCodes from '../barcode/ProductCodes';
 import Modal from '../shared/Modal';
 
@@ -133,6 +134,16 @@ export default function ItemForm({ item, shopId, role, userId, onDone }) {
     setError('');
     if (!draft.shopId) {
       setError('Please select a shop before saving this item.');
+      return;
+    }
+    // Extra units feed directly into units.js's conversion math (factor is
+    // a divisor/multiplier when breaking a Pack/Box open into base units —
+    // see breakOpenOneLevelUp) and into unitStock counts, both entered by
+    // hand with no prior validation — see itemFormValidation.js for exactly
+    // what this catches and why.
+    const unitsError = validateUnits(draft.baseUnitName, draft.units);
+    if (unitsError) {
+      setError(unitsError);
       return;
     }
     setSaving(true);

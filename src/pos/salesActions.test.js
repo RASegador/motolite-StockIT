@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
-import { completeSale, cancelSale, refundSaleItems } from './salesActions';
+import { completeSale, cancelSale, refundSaleItems, backfillLineIds } from './salesActions';
 
 let testEnv, mgrDb, ownerDb;
 
@@ -196,6 +196,52 @@ describe('refundSaleItems', () => {
     await cancelSale(ownerDb, sale);
     await expect(refundSaleItems(ownerDb, sale, [{ lineId: sale.items[0].lineId, qty: 1 }], { refundedBy: 'owner1' }))
       .rejects.toThrow(/cancelled/i);
+  });
+});
+
+describe('backfillLineIds', () => {
+  it('assigns a lineId to every item on a pre-refund-era sale, without touching totals', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'sales', 'oldSale1'), {
+        id: 'oldSale1', receiptNo: 'ROLD1', shopId: 'shopA', total: 1000, totalProfit: 200,
+        refunds: [], refundedAmount: 0, refundedProfit: 0, cancelled: false,
+        items: [{ itemId: 'item1', sku: 'N50', name: 'Old Item', qty: 1, unitName: 'Piece', unitPrice: 1000, unitCost: 800 }],
+      });
+    });
+    const oldSale = (await getDoc(doc(ownerDb, 'sales', 'oldSale1'))).data();
+    expect(oldSale.items[0].lineId).toBeUndefined();
+
+    const updated = await backfillLineIds(ownerDb, oldSale);
+    expect(updated.items[0].lineId).toBeTruthy();
+    expect(updated.total).toBe(1000); // untouched
+
+    const saleDoc = (await getDoc(doc(ownerDb, 'sales', 'oldSale1'))).data();
+    expect(saleDoc.items[0].lineId).toBe(updated.items[0].lineId);
+  });
+
+  it('makes a refund possible afterward, exactly like a sale that always had lineIds', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'sales', 'oldSale2'), {
+        id: 'oldSale2', receiptNo: 'ROLD2', shopId: 'shopA', total: 1000, totalProfit: 200,
+        refunds: [], refundedAmount: 0, refundedProfit: 0, cancelled: false,
+        items: [{ itemId: 'item1', sku: 'N50', name: 'Old Item', qty: 1, unitName: 'Piece', unitPrice: 1000, unitCost: 800 }],
+      });
+    });
+    const oldSale = (await getDoc(doc(ownerDb, 'sales', 'oldSale2'))).data();
+    const updated = await backfillLineIds(ownerDb, oldSale);
+
+    await refundSaleItems(ownerDb, updated, [{ lineId: updated.items[0].lineId, qty: 1 }], { refundedBy: 'owner1' });
+    const saleDoc = (await getDoc(doc(ownerDb, 'sales', 'oldSale2'))).data();
+    expect(saleDoc.refundedAmount).toBe(1000);
+  });
+
+  it('is a no-op (no write, same object) when every item already has a lineId', async () => {
+    const sale = await completeSale(
+      mgrDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
+    );
+    const result = await backfillLineIds(ownerDb, sale);
+    expect(result).toBe(sale);
   });
 });
 

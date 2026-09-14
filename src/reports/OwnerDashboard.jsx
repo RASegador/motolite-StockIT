@@ -14,6 +14,7 @@ import { computeShopComparisonStats, filterSalesForChart, groupSalesByDate } fro
 import { buildActivityFeed, activityLabel } from './activityFeed';
 import { exportSalesReportPdf, exportInventoryReportPdf } from './pdfExport';
 import { currency } from '../lib/format';
+import LowStockDigest from './LowStockDigest';
 
 export default function OwnerDashboard({ userId }) {
   const items = useItems({ role: 'admin' });
@@ -65,6 +66,7 @@ export default function OwnerDashboard({ userId }) {
   return (
     <div className="owner-dashboard">
       <h2>All Shops Overview</h2>
+      <LowStockDigest alerts={lowStockAlerts} scopeKey="admin" />
 
       <div className="dashboard-stat-row">
         <div className="stat-tile"><span>Inventory value</span><strong>{currency(totals.inventoryValue)}</strong></div>

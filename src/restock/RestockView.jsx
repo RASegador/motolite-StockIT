@@ -14,6 +14,33 @@ import { db } from '../firebase';
 import Modal from '../shared/Modal';
 import Tooltip from '../shared/Tooltip';
 
+// Styled replacement for the browser's plain window.prompt() — matches the
+// app's own Modal look, the way every other reason/notes entry point in
+// the app already does (e.g. CreateRequestModal's Notes field above).
+function RejectRequestModal({ request, onClose, onConfirm, saving, error }) {
+  const [notes, setNotes] = useState('');
+  return (
+    <Modal title={`Reject request — ${request.itemName}`} onClose={onClose} dirty={notes.trim() !== ''}>
+      <form onSubmit={(e) => { e.preventDefault(); onConfirm(notes); }} className="item-form">
+        <div className="item-form-grid">
+          <label className="item-form-field">
+            <span className="item-form-field-label">Reason (optional)</span>
+            <input
+              autoFocus value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Already in transit from another shop"
+            />
+          </label>
+        </div>
+        {error && <p className="modal-error">{error}</p>}
+        <div className="form-actions">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className="btn-danger" disabled={saving}>{saving ? 'Rejecting…' : 'Reject request'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // Pre-fills from a low-stock alert when opened via "Create request" on an
 // alert row; otherwise starts blank and the requester picks an item.
 function CreateRequestModal({ shopId, userId, items, prefill, onClose, onDone }) {
@@ -85,17 +112,23 @@ export default function RestockView({ role, shopId, userId }) {
   const [creatingFor, setCreatingFor] = useState(undefined); // undefined = closed, null = blank form, {itemId,...} = prefilled
   const [approving, setApproving] = useState(null);
   const [addingStock, setAddingStock] = useState(false);
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectSaving, setRejectSaving] = useState(false);
+  const [rejectError, setRejectError] = useState('');
   const [error, setError] = useState('');
 
   const alerts = computeRestockAlerts(allItems, shops);
 
-  async function handleReject(request) {
-    setError('');
-    const notes = window.prompt('Reason for rejecting this request (optional):') || '';
+  async function handleReject(notes) {
+    setRejectError('');
+    setRejectSaving(true);
     try {
-      await rejectRestockRequest(db, request.id, { reviewedBy: userId, notes });
+      await rejectRestockRequest(db, rejecting.id, { reviewedBy: userId, notes });
+      setRejecting(null);
     } catch (err) {
-      setError(err.message);
+      setRejectError(err.message);
+    } finally {
+      setRejectSaving(false);
     }
   }
 
@@ -182,7 +215,7 @@ export default function RestockView({ role, shopId, userId }) {
                           <Tooltip label="Approve and start the outgoing transfer">
                             <button className="btn-primary" onClick={() => setApproving(r)}>Approve</button>
                           </Tooltip>
-                          <button className="btn-danger" onClick={() => handleReject(r)}>Reject</button>
+                          <button className="btn-danger" onClick={() => { setRejectError(''); setRejecting(r); }}>Reject</button>
                         </>
                       )}
                       {r.status === 'pending' && !isReviewer && r.requestingShopId === shopId && (
@@ -219,6 +252,12 @@ export default function RestockView({ role, shopId, userId }) {
         <ApproveRestockRequestModal
           request={approving} role={role} ownShopId={shopId} approverId={userId}
           onClose={() => setApproving(null)} onDone={() => setApproving(null)}
+        />
+      )}
+      {rejecting && (
+        <RejectRequestModal
+          request={rejecting} saving={rejectSaving} error={rejectError}
+          onClose={() => setRejecting(null)} onConfirm={handleReject}
         />
       )}
       {addingStock && (
