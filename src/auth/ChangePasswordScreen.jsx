@@ -14,7 +14,17 @@ export default function ChangePasswordScreen({ onSubmit, onLogout }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    // Firebase Auth's own floor is 6 characters — this is deliberately
+    // stricter (8+, a letter AND a digit) since the account this replaces
+    // a password for often has real write access (Manager/Warehouse), not
+    // just read access. Shown as a visible hint below the field too (not
+    // just as an error after a failed attempt), so nobody has to guess
+    // the rule by trial and error.
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('Password must include at least one letter and one number.');
+      return;
+    }
     if (password !== confirm) { setError('Passwords do not match.'); return; }
     setSubmitting(true);
     try {
@@ -36,6 +46,7 @@ export default function ChangePasswordScreen({ onSubmit, onLogout }) {
           <label className="item-form-field">
             <span className="item-form-field-label">New password</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
+            <span className="item-form-codes-hint">At least 8 characters, including a letter and a number.</span>
           </label>
           <label className="item-form-field">
             <span className="item-form-field-label">Confirm password</span>

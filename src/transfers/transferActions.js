@@ -19,7 +19,14 @@ import { newId } from '../lib/format';
 // pre-query and no race window. Both legs operate in the item's base
 // unit, same simplification as damage reports (Task 13).
 
-function destItemId(toShopId, sourceItemId) {
+// Exported so other places that credit a SPECIFIC location's stock for a
+// warehouse item — currently just src/restock/manualStockActions.js's
+// direct Admin stock entry — resolve to the exact same doc id a Transfer
+// would use. Without this, a manual entry and a later-approved transfer
+// for the same (item, destination) pair could create two separate item
+// docs for one SKU at one shop, which is exactly the duplication the
+// "Inventory & Restock Section Structure" spec says must never happen.
+export function destItemId(toShopId, sourceItemId) {
   return `xfer_${toShopId}_${sourceItemId}`;
 }
 

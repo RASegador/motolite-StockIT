@@ -73,8 +73,21 @@ service cloud.firestore {
     // src/restock/useWarehouseItems.js / WarehouseRestockModal.jsx.
     // Read-only: this never appears in the `items` UPDATE rule below, so
     // it grants no write access to warehouse stock.
+    // Guarded with `exists()` before `get()` — required so this never
+    // throws a "Null value error" that aborts the WHOLE enclosing `||`
+    // expression in the items read rule below. Two distinct triggers were
+    // seen in practice: (1) a shop referenced by an item's `shopId` can be
+    // missing (deleted shop, stale/seed data, a test fixture that never
+    // created a `shops` doc) — without the exists() guard, `get()` on a
+    // nonexistent doc throws instead of evaluating to false; (2) the rules
+    // evaluator does not reliably short-circuit every disjunct of an `||`
+    // once an earlier one is already true, so this function can still run
+    // (and throw) even when `sameShopAsDoc()` alone would have granted the
+    // read. Both cases must degrade to "not a warehouse shop", never to an
+    // error.
     function isWarehouseShop(shopId) {
       return shopId != null &&
+        exists(/databases/$(database)/documents/shops/$(shopId)) &&
         get(/databases/$(database)/documents/shops/$(shopId)).data.get('type', '') == 'warehouse';
     }
     function onlyChanged(keys) {
@@ -134,7 +147,19 @@ service cloud.firestore {
     // item's outright creation/deletion as a manual action — is ever
     // permitted for a non-Admin, at the rules layer as well as the UI.
     match /items/{itemId} {
-      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId') ||
+      // `resource == null` (the doc doesn't exist) is granted to every
+      // signed-in user up front — there is no data to leak on a
+      // nonexistent doc, and both saveItem() and confirmReceipt() rely on
+      // being able to check "does this item already exist" via a plain
+      // get()/transaction.get() BEFORE they'd have create rights on it (the
+      // destination item for a brand-new transfer target is the common
+      // case: destItemId() picks a deterministic doc id that doesn't exist
+      // yet, and confirmReceipt() must read it once to decide whether to
+      // create or top up). Without this, that existence check itself was
+      // denied — sameShopAsDoc()/isWarehouseShop() can't evaluate true
+      // against a null `resource`, and there was no fallback.
+      allow read: if isSignedIn() && (isAdmin() || resource == null ||
+        sameShopAsDoc(resource, 'shopId') ||
         (isLocationStaff() && isWarehouseShop(docField(resource, 'shopId'))));
       allow create: if isAdmin() ||
         (isLocationStaff() && request.resource.data.shopId == myShopId() &&

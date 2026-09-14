@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, ArrowUpCircle, PackagePlus, Eye, Battery } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUpCircle, PackagePlus, Eye, Battery, Download, Upload } from 'lucide-react';
 import Tooltip from '../shared/Tooltip';
 import { useItems } from './useItems';
 import { useWarehouseItems } from '../restock/useWarehouseItems';
@@ -10,10 +10,12 @@ import { currency } from '../lib/format';
 import { can } from '../lib/permissions';
 import { useCategories, useSuppliers } from '../catalog/useCatalog';
 import { db } from '../firebase';
+import { toCsv } from '../lib/csv';
 import ItemForm from './ItemForm';
 import ItemDetailView from './ItemDetailView';
 import MoveStockModal from './MoveStockModal';
 import RestockModal from './RestockModal';
+import ImportItemsModal from './ImportItemsModal';
 
 function stockStatus(item) {
   if (item.quantity <= 0) return { key: 'out', label: 'Out of Stock' };
@@ -59,6 +61,7 @@ export default function InventoryList({ role, shopId, userId }) {
   const [movingItem, setMovingItem] = useState(null);
   const [restockingItem, setRestockingItem] = useState(null);
   const [showNewForm, setShowNewForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const q = search.trim().toLowerCase();
   let filtered = items.filter((it) => {
@@ -76,6 +79,30 @@ export default function InventoryList({ role, shopId, userId }) {
     const cmp = typeof av === 'string' ? (av || '').localeCompare(bv || '') : (av || 0) - (bv || 0);
     return sortDir === 'desc' ? -cmp : cmp;
   });
+
+  // Exports exactly what's currently on screen (respects search/category/
+  // status filters) — pairs with ImportItemsModal, which accepts the same
+  // column names back, so "export, edit in a spreadsheet, re-import" is a
+  // real round trip rather than two independently-shaped formats.
+  const EXPORT_HEADERS = ['sku', 'name', 'category', 'supplier', 'quantity', 'unitCost', 'sellingPrice', 'batteryModel', 'voltage', 'capacity', 'vehicleType', 'reorderPoint'];
+  function handleExport() {
+    const rows = filtered.map((it) => ({
+      sku: it.sku || '', name: it.name || '', category: it.category || '', supplier: supplierNames(it) === '—' ? '' : supplierNames(it),
+      quantity: it.quantity ?? 0, unitCost: it.unitCost ?? '', sellingPrice: it.sellingPrice ?? '',
+      batteryModel: it.batteryModel || '', voltage: it.voltage ?? '', capacity: it.capacity || '',
+      vehicleType: it.vehicleType || '', reorderPoint: it.reorderPoint ?? '',
+    }));
+    const csv = toCsv(EXPORT_HEADERS, rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="inventory-list">
@@ -102,6 +129,14 @@ export default function InventoryList({ role, shopId, userId }) {
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <div className="inventory-toolbar-spacer" />
+        {/* Exporting is read-only, so it's available to anyone who can see
+            this list at all (Manager/Warehouse's own store, Admin's
+            warehouse master list) — only creating/importing is gated on
+            editInventory. */}
+        <button className="btn-secondary" onClick={handleExport}><Download size={16} /> Export CSV</button>
+        {can(role, 'editInventory') && (
+          <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={16} /> Import CSV</button>
+        )}
         {/* Owner/Admin no longer needs to pre-select an "active shop" from
             the sidebar just to open this form — ItemForm itself carries a
             required Shop dropdown for new items now, so the shop is chosen
@@ -177,6 +212,12 @@ export default function InventoryList({ role, shopId, userId }) {
         </table>
       </div>
 
+      {showImport && (
+        <ImportItemsModal
+          warehouseShops={shops.filter((s) => s.type === 'warehouse')} items={warehouseItems} suppliers={suppliers}
+          userId={userId} onClose={() => setShowImport(false)} onDone={() => setShowImport(false)}
+        />
+      )}
       {showNewForm && <ItemForm shopId={shopId} role={role} userId={userId} onDone={() => setShowNewForm(false)} />}
       {editingItem && <ItemForm item={editingItem} shopId={shopId} role={role} userId={userId} onDone={() => setEditingItem(null)} />}
       {viewingItem && <ItemDetailView item={viewingItem} onClose={() => setViewingItem(null)} />}

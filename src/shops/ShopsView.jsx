@@ -37,6 +37,19 @@ export default function ShopsView() {
     }
   }
 
+  async function handleDelete(shop) {
+    setError('');
+    if (!window.confirm(`Delete "${shop.name}"? This can't be undone.`)) return;
+    try {
+      await deleteShop(db, shop.id);
+    } catch (err) {
+      // deleteShop() itself refuses when the shop still has stock, an
+      // assigned user, an in-transit transfer, or an open restock request
+      // — this is that message surfacing, not a network/permission error.
+      setError(err.message);
+    }
+  }
+
   return (
     <div className="shops-view">
       <div className="section-header-row">
@@ -102,7 +115,7 @@ export default function ShopsView() {
                     </button>
                   </Tooltip>
                   <Tooltip label="Delete this shop">
-                    <button className="icon-button icon-button-danger" aria-label="Delete" onClick={() => deleteShop(db, shop.id)}>
+                    <button className="icon-button icon-button-danger" aria-label="Delete" onClick={() => handleDelete(shop)}>
                       <Trash2 size={14} />
                     </button>
                   </Tooltip>

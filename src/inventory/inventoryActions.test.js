@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { saveItem, deleteItem } from './inventoryActions';
 
-let testEnv, mgrDb;
+let testEnv, adminDb;
 
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
@@ -16,14 +16,21 @@ afterAll(async () => testEnv.cleanup());
 beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), 'users', 'mgrA'), { role: 'manager', shopId: 'shopA' });
+    // "Inventory Permissions, Requests, and Receiving Workflow" spec:
+    // editInventory/deleteInventory are Admin-only — saveItem/deleteItem
+    // are direct item edits, never something a Manager can call anymore
+    // (they only ever touch items indirectly via the request/receive
+    // workflow — see transferActions.test.js's confirmReceipt suite for
+    // that path). This suite exercises them as the Admin who actually has
+    // that authority.
+    await setDoc(doc(ctx.firestore(), 'users', 'admin1'), { role: 'admin' });
   });
-  mgrDb = testEnv.authenticatedContext('mgrA').firestore();
+  adminDb = testEnv.authenticatedContext('admin1').firestore();
 });
 
 describe('saveItem', () => {
   it('creates a new item, computing quantity from the per-unit stock breakdown', async () => {
-    const itemId = await saveItem(mgrDb, {
+    const itemId = await saveItem(adminDb, {
       sku: 'N50', name: 'Motolite N50', baseUnitName: 'Piece', baseUnitStock: 8,
       units: [{ name: 'Pack', factor: 4, stock: 2, cost: 3200, price: 4000 }],
       unitCost: 800, sellingPrice: 1000, markupType: 'percent', markupValue: 25,
@@ -31,7 +38,7 @@ describe('saveItem', () => {
       vehicleType: 'Car',
     }, { shopId: 'shopA' });
 
-    const snap = await getDoc(doc(mgrDb, 'items', itemId));
+    const snap = await getDoc(doc(adminDb, 'items', itemId));
     const data = snap.data();
     expect(data.shopId).toBe('shopA');
     expect(data.quantity).toBe(16); // 8 loose Pieces + 2 Packs * factor 4
@@ -42,18 +49,18 @@ describe('saveItem', () => {
   });
 
   it('updates an existing item in place, keeping its id and shopId', async () => {
-    const itemId = await saveItem(mgrDb, {
+    const itemId = await saveItem(adminDb, {
       sku: 'N50', name: 'Motolite N50', baseUnitName: 'Piece', baseUnitStock: 8, units: [],
       unitCost: 800, sellingPrice: 1000, markupType: 'percent', markupValue: 25,
     }, { shopId: 'shopA' });
 
-    await saveItem(mgrDb, {
+    await saveItem(adminDb, {
       id: itemId, sku: 'N50', name: 'Motolite N50 (Updated)', baseUnitName: 'Piece',
       baseUnitStock: 10, units: [], unitCost: 800, sellingPrice: 1000,
       markupType: 'percent', markupValue: 25,
     }, { shopId: 'shopA' });
 
-    const snap = await getDoc(doc(mgrDb, 'items', itemId));
+    const snap = await getDoc(doc(adminDb, 'items', itemId));
     expect(snap.data().name).toBe('Motolite N50 (Updated)');
     expect(snap.data().quantity).toBe(10);
     expect(snap.data().shopId).toBe('shopA');
@@ -70,13 +77,13 @@ describe('saveItem', () => {
     // doc back, adapts it into the form's shape the same way
     // ItemForm/draftFromItem does, and feeds THAT into saveItem again for
     // an edit — the "editing a document only to fix a typo" scenario.
-    const itemId = await saveItem(mgrDb, {
+    const itemId = await saveItem(adminDb, {
       sku: 'N70', name: 'Motolite N70', baseUnitName: 'Piece', baseUnitStock: 12,
       units: [{ name: 'Pack', factor: 4, cost: 3200, price: 4000, stock: 3 }],
       unitCost: 800, markupType: 'percent', markupValue: 25,
     }, { shopId: 'shopA' });
 
-    const firstSnap = await getDoc(doc(mgrDb, 'items', itemId));
+    const firstSnap = await getDoc(doc(adminDb, 'items', itemId));
     const savedDoc = firstSnap.data();
     expect(savedDoc.quantity).toBe(24); // 12 loose Pieces + 3 Packs * factor 4
     expect(savedDoc.sellingPrice).toBe(1000); // 800 * 1.25
@@ -91,9 +98,9 @@ describe('saveItem', () => {
       name: 'Motolite N70 (typo fixed)', // the only thing the user actually changed
     };
 
-    await saveItem(mgrDb, formShapedDraft, { shopId: 'shopA' });
+    await saveItem(adminDb, formShapedDraft, { shopId: 'shopA' });
 
-    const secondSnap = await getDoc(doc(mgrDb, 'items', itemId));
+    const secondSnap = await getDoc(doc(adminDb, 'items', itemId));
     const updatedDoc = secondSnap.data();
     expect(updatedDoc.name).toBe('Motolite N70 (typo fixed)');
     expect(updatedDoc.quantity).toBe(24); // unchanged, not zeroed
@@ -102,35 +109,35 @@ describe('saveItem', () => {
   });
 
   it('recomputes sellingPrice from fresh markup inputs on edit instead of always keeping the old price', async () => {
-    const itemId = await saveItem(mgrDb, {
+    const itemId = await saveItem(adminDb, {
       sku: 'N50Z', name: 'Motolite N50Z', baseUnitName: 'Piece', baseUnitStock: 5, units: [],
       unitCost: 1000, markupType: 'percent', markupValue: 10,
     }, { shopId: 'shopA' });
 
-    const firstSnap = await getDoc(doc(mgrDb, 'items', itemId));
+    const firstSnap = await getDoc(doc(adminDb, 'items', itemId));
     expect(firstSnap.data().sellingPrice).toBe(1100);
 
     // Simulate the user raising the markup on an edit (same form-shaped
     // draft an edit would submit).
-    await saveItem(mgrDb, {
+    await saveItem(adminDb, {
       ...firstSnap.data(),
       baseUnitStock: firstSnap.data().unitStock.Piece,
       units: [],
       markupValue: 50,
     }, { shopId: 'shopA' });
 
-    const secondSnap = await getDoc(doc(mgrDb, 'items', itemId));
+    const secondSnap = await getDoc(doc(adminDb, 'items', itemId));
     expect(secondSnap.data().sellingPrice).toBe(1500); // 1000 * 1.5, not stuck at 1100
   });
 });
 
 describe('deleteItem', () => {
   it('removes the item document', async () => {
-    const itemId = await saveItem(mgrDb, {
+    const itemId = await saveItem(adminDb, {
       sku: 'N50', name: 'Motolite N50', baseUnitName: 'Piece', baseUnitStock: 1, units: [],
       unitCost: 800, sellingPrice: 1000, markupType: 'percent', markupValue: 25,
     }, { shopId: 'shopA' });
-    await deleteItem(mgrDb, itemId);
-    expect((await getDoc(doc(mgrDb, 'items', itemId))).exists()).toBe(false);
+    await deleteItem(adminDb, itemId);
+    expect((await getDoc(doc(adminDb, 'items', itemId))).exists()).toBe(false);
   });
 });

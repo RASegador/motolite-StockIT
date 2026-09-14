@@ -39,6 +39,14 @@
         { "fieldPath": "toShopId", "order": "ASCENDING" },
         { "fieldPath": "initiatedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "restockRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "requestingShopId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

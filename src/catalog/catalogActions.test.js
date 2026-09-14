@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { doc, setDoc, getDocs, collection } from 'firebase/firestore';
 import { addCategory, deleteCategory } from './catalogActions';
 
-let testEnv, mgrDb;
+let testEnv, adminDb;
 
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
@@ -16,37 +16,41 @@ afterAll(async () => testEnv.cleanup());
 beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), 'users', 'mgrA'), { role: 'manager', shopId: 'shopA' });
+    // "Manager Portal & Account Structure" spec: Categories are Admin-only
+    // to write (a Manager can only read them, e.g. for the Inventory
+    // Category filter) — this suite exercises addCategory/deleteCategory
+    // as the Admin who is actually allowed to call them.
+    await setDoc(doc(ctx.firestore(), 'users', 'admin1'), { role: 'admin' });
   });
-  mgrDb = testEnv.authenticatedContext('mgrA').firestore();
+  adminDb = testEnv.authenticatedContext('admin1').firestore();
 });
 
 describe('addCategory / deleteCategory', () => {
   it('adds a category', async () => {
-    await addCategory(mgrDb, 'Motorcycle Batteries');
-    const snap = await getDocs(collection(mgrDb, 'categories'));
+    await addCategory(adminDb, 'Motorcycle Batteries');
+    const snap = await getDocs(collection(adminDb, 'categories'));
     expect(snap.docs.map((d) => d.data().name)).toContain('Motorcycle Batteries');
   });
 
   it('rejects a duplicate (case-insensitive) category name', async () => {
-    await addCategory(mgrDb, 'Motorcycle Batteries');
-    await expect(addCategory(mgrDb, 'motorcycle batteries')).rejects.toThrow('already exists');
+    await addCategory(adminDb, 'Motorcycle Batteries');
+    await expect(addCategory(adminDb, 'motorcycle batteries')).rejects.toThrow('already exists');
   });
 
   it('refuses to delete a category still referenced by an item', async () => {
-    await addCategory(mgrDb, 'Motorcycle Batteries');
+    await addCategory(adminDb, 'Motorcycle Batteries');
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'items', 'item1'), {
         id: 'item1', shopId: 'shopA', category: 'Motorcycle Batteries',
       });
     });
-    await expect(deleteCategory(mgrDb, 'Motorcycle Batteries')).rejects.toThrow('still use it');
+    await expect(deleteCategory(adminDb, 'Motorcycle Batteries')).rejects.toThrow('still use it');
   });
 
   it('deletes a category with no items referencing it', async () => {
-    await addCategory(mgrDb, 'Motorcycle Batteries');
-    await deleteCategory(mgrDb, 'Motorcycle Batteries');
-    const snap = await getDocs(collection(mgrDb, 'categories'));
+    await addCategory(adminDb, 'Motorcycle Batteries');
+    await deleteCategory(adminDb, 'Motorcycle Batteries');
+    const snap = await getDocs(collection(adminDb, 'categories'));
     expect(snap.docs.map((d) => d.data().name)).not.toContain('Motorcycle Batteries');
   });
 });

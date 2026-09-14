@@ -1,7 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+// userActions.js imports { auth, db, firebaseConfig } from '../firebase' at
+// module scope for its non-test callers (createUser/completeFirstLogin/
+// setOwnUsername use those directly, not a passed-in `db`). That file calls
+// `getAuth(app)` eagerly on import using import.meta.env.VITE_FIREBASE_*,
+// which are never set in the test process (no .env here) — so importing
+// userActions.js unmocked throws `auth/invalid-api-key` before a single
+// test in this file even registers. The tests below only ever exercise
+// updateUserRole/updateUserShop/setUserActive, which all take an explicit
+// `db` argument (ownerDb, from the rules-unit-testing emulator) and never
+// touch the real firebase.js exports — so a bare stand-in is enough.
+vi.mock('../firebase', () => ({ auth: {}, db: {}, firebaseConfig: {} }));
 
 let testEnv, ownerDb;
 
@@ -31,29 +43,29 @@ import { updateUserRole, updateUserShop, setUserActive } from './userActions';
 describe('userActions (Firestore doc updates)', () => {
   it('updates a user\'s role', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', 'cash1'), { role: 'cashier', shopId: 'shopA' });
+      await setDoc(doc(ctx.firestore(), 'users', 'staffA'), { role: 'manager', shopId: 'shopA' });
     });
-    await updateUserRole(ownerDb, 'cash1', 'manager');
-    const snap = await getDoc(doc(ownerDb, 'users', 'cash1'));
-    expect(snap.data().role).toBe('manager');
+    await updateUserRole(ownerDb, 'staffA', 'warehouse');
+    const snap = await getDoc(doc(ownerDb, 'users', 'staffA'));
+    expect(snap.data().role).toBe('warehouse');
   });
 
   it('reassigns a user\'s shop', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', 'cash1'), { role: 'cashier', shopId: 'shopA' });
+      await setDoc(doc(ctx.firestore(), 'users', 'staffA'), { role: 'manager', shopId: 'shopA' });
     });
-    await updateUserShop(ownerDb, 'cash1', 'shopB');
-    const snap = await getDoc(doc(ownerDb, 'users', 'cash1'));
+    await updateUserShop(ownerDb, 'staffA', 'shopB');
+    const snap = await getDoc(doc(ownerDb, 'users', 'staffA'));
     expect(snap.data().shopId).toBe('shopB');
   });
 
   it('deactivates and reactivates a user', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', 'cash1'), { role: 'cashier', shopId: 'shopA', active: true });
+      await setDoc(doc(ctx.firestore(), 'users', 'staffA'), { role: 'manager', shopId: 'shopA', active: true });
     });
-    await setUserActive(ownerDb, 'cash1', false);
-    expect((await getDoc(doc(ownerDb, 'users', 'cash1'))).data().active).toBe(false);
-    await setUserActive(ownerDb, 'cash1', true);
-    expect((await getDoc(doc(ownerDb, 'users', 'cash1'))).data().active).toBe(true);
+    await setUserActive(ownerDb, 'staffA', false);
+    expect((await getDoc(doc(ownerDb, 'users', 'staffA'))).data().active).toBe(false);
+    await setUserActive(ownerDb, 'staffA', true);
+    expect((await getDoc(doc(ownerDb, 'users', 'staffA'))).data().active).toBe(true);
   });
 });

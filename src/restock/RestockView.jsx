@@ -8,6 +8,7 @@ import { createRestockRequest, rejectRestockRequest, cancelRestockRequest } from
 import { STATUS_LABELS, statusBadgeClass } from './restockStatus';
 import ApproveRestockRequestModal from './ApproveRestockRequestModal';
 import WarehouseRestockModal from './WarehouseRestockModal';
+import ManualStockEntryModal from './ManualStockEntryModal';
 import { can } from '../lib/permissions';
 import { db } from '../firebase';
 import Modal from '../shared/Modal';
@@ -83,6 +84,7 @@ export default function RestockView({ role, shopId, userId }) {
 
   const [creatingFor, setCreatingFor] = useState(undefined); // undefined = closed, null = blank form, {itemId,...} = prefilled
   const [approving, setApproving] = useState(null);
+  const [addingStock, setAddingStock] = useState(false);
   const [error, setError] = useState('');
 
   const alerts = computeRestockAlerts(allItems, shops);
@@ -110,11 +112,25 @@ export default function RestockView({ role, shopId, userId }) {
     <div className="restock-view">
       <div className="section-header-row">
         <h2><PackageSearch size={18} /> Restock</h2>
-        {can(role, 'createRestockRequest') && (
-          <button type="button" className="btn-primary" onClick={() => setCreatingFor(null)}>
-            <Plus size={16} /> New restock request
-          </button>
-        )}
+        <div className="restock-header-actions">
+          {/* Admin-only: bypasses the request/approve/dispatch/receive
+              cycle entirely and credits a shop's stock right away — see
+              ManualStockEntryModal's own comment for when to use this
+              instead of a Restock Request. Gated on `editInventory`
+              (Admin-only — see permissions.js), not `createRestockRequest`
+              (which Manager also has, but Manager must never write stock
+              directly). */}
+          {can(role, 'editInventory') && (
+            <button type="button" className="btn-secondary" onClick={() => setAddingStock(true)}>
+              <Plus size={16} /> Add stock to a shop
+            </button>
+          )}
+          {can(role, 'createRestockRequest') && (
+            <button type="button" className="btn-primary" onClick={() => setCreatingFor(null)}>
+              <Plus size={16} /> New restock request
+            </button>
+          )}
+        </div>
       </div>
       {error && <p className="restock-error">{error}</p>}
 
@@ -203,6 +219,12 @@ export default function RestockView({ role, shopId, userId }) {
         <ApproveRestockRequestModal
           request={approving} role={role} ownShopId={shopId} approverId={userId}
           onClose={() => setApproving(null)} onDone={() => setApproving(null)}
+        />
+      )}
+      {addingStock && (
+        <ManualStockEntryModal
+          warehouseShopIds={warehouseShopIds} userId={userId}
+          onClose={() => setAddingStock(false)} onDone={() => setAddingStock(false)}
         />
       )}
     </div>

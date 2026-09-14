@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { completeSale, cancelSale, refundSaleItems } from './salesActions';
 
-let testEnv, cashDb, ownerDb;
+let testEnv, mgrDb, ownerDb;
 
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
@@ -16,7 +16,7 @@ afterAll(async () => testEnv.cleanup());
 beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), 'users', 'cashA'), { role: 'cashier', shopId: 'shopA' });
+    await setDoc(doc(ctx.firestore(), 'users', 'mgrA'), { role: 'manager', shopId: 'shopA' });
     await setDoc(doc(ctx.firestore(), 'users', 'owner1'), { role: 'owner', shopId: null });
     await setDoc(doc(ctx.firestore(), 'items', 'item1'), {
       id: 'item1', sku: 'N50', shopId: 'shopA', baseUnitName: 'Piece',
@@ -24,43 +24,44 @@ beforeEach(async () => {
       unitCost: 800, sellingPrice: 1000,
     });
   });
-  cashDb = testEnv.authenticatedContext('cashA').firestore();
-  // Cancelling a sale is Owner/Admin-only per the spec's permission table
-  // (Shop Manager and Cashier both get "—" for Cancel sales) — so the
-  // cancelSale tests below run against ownerDb, not cashDb.
+  mgrDb = testEnv.authenticatedContext('mgrA').firestore();
+  // Cancelling a sale is Admin-only per the spec's permission table (a
+  // Manager gets "—" for Cancel sales, same as Cashier used to before it
+  // was removed) — so the cancelSale tests below run against ownerDb
+  // (role 'owner', the isAdmin() legacy alias), not mgrDb.
   ownerDb = testEnv.authenticatedContext('owner1').firestore();
 });
 
 describe('completeSale', () => {
   it('deducts stock and records a sale', async () => {
     const sale = await completeSale(
-      cashDb,
+      mgrDb,
       [{ itemId: 'item1', qty: 3, unitName: 'Piece', unitPrice: 1000 }],
       5000,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     expect(sale.total).toBe(3000);
-    const item = (await getDoc(doc(cashDb, 'items', 'item1'))).data();
+    const item = (await getDoc(doc(mgrDb, 'items', 'item1'))).data();
     expect(item.quantity).toBe(7);
   });
 
   it('rejects a sale that would oversell, without deducting anything', async () => {
     await expect(completeSale(
-      cashDb,
+      mgrDb,
       [{ itemId: 'item1', qty: 999, unitName: 'Piece', unitPrice: 1000 }],
       null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     )).rejects.toThrow(/not enough stock/i);
-    const item = (await getDoc(doc(cashDb, 'items', 'item1'))).data();
+    const item = (await getDoc(doc(mgrDb, 'items', 'item1'))).data();
     expect(item.quantity).toBe(10);
   });
 
   it('re-reads stock fresh so two sequential sales on the same item both see the latest total (no lost update)', async () => {
-    await completeSale(cashDb, [{ itemId: 'item1', qty: 4, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' });
-    await completeSale(cashDb, [{ itemId: 'item1', qty: 4, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' });
-    const item = (await getDoc(doc(cashDb, 'items', 'item1'))).data();
+    await completeSale(mgrDb, [{ itemId: 'item1', qty: 4, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' });
+    await completeSale(mgrDb, [{ itemId: 'item1', qty: 4, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' });
+    const item = (await getDoc(doc(mgrDb, 'items', 'item1'))).data();
     expect(item.quantity).toBe(2); // 10 - 4 - 4, never double-counted or lost
   });
 });
@@ -68,8 +69,8 @@ describe('completeSale', () => {
 describe('cancelSale', () => {
   it('restores both quantity and unitStock for the exact unit sold', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 3, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      mgrDb, [{ itemId: 'item1', qty: 3, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     await cancelSale(ownerDb, sale);
     const item = (await getDoc(doc(ownerDb, 'items', 'item1'))).data();
@@ -79,8 +80,8 @@ describe('cancelSale', () => {
 
   it('refuses to cancel an already-cancelled sale', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      mgrDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     await cancelSale(ownerDb, sale);
     await expect(cancelSale(ownerDb, { ...sale, cancelled: true })).rejects.toThrow(/already cancelled/i);
@@ -88,8 +89,8 @@ describe('cancelSale', () => {
 
   it('rejects a second cancelSale call using the ORIGINAL stale sale object (race/double-click), without double-restoring stock', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 3, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      mgrDb, [{ itemId: 'item1', qty: 3, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     // First call succeeds and restores stock.
     await cancelSale(ownerDb, sale);
@@ -116,8 +117,8 @@ describe('cancelSale', () => {
 describe('completeSale discount', () => {
   it('applies no discount when none is given (unchanged behavior)', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      mgrDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     expect(sale.subtotal).toBe(2000);
     expect(sale.discountType).toBeNull();
@@ -127,8 +128,8 @@ describe('completeSale discount', () => {
 
   it('applies a percent discount, clamped to 0-100, and reduces profit by the same amount', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com', discount: { type: 'percent', value: 10 } }
+      mgrDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com', discount: { type: 'percent', value: 10 } }
     );
     expect(sale.subtotal).toBe(2000);
     expect(sale.discountType).toBe('percent');
@@ -140,8 +141,8 @@ describe('completeSale discount', () => {
 
   it('applies a fixed discount, capped at the subtotal (never a negative total)', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com', discount: { type: 'fixed', value: 5000 } }
+      mgrDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com', discount: { type: 'fixed', value: 5000 } }
     );
     expect(sale.subtotal).toBe(1000);
     expect(sale.discountAmount).toBe(1000); // capped, not 5000
@@ -150,8 +151,8 @@ describe('completeSale discount', () => {
 
   it('ignores a discount with no usable value', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com', discount: { type: 'percent', value: 0 } }
+      mgrDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com', discount: { type: 'percent', value: 0 } }
     );
     expect(sale.discountType).toBeNull();
     expect(sale.total).toBe(1000);
@@ -161,8 +162,8 @@ describe('completeSale discount', () => {
 describe('refundSaleItems', () => {
   it('restores stock, records the refund, and reduces net revenue via refundedAmount', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 4, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      mgrDb, [{ itemId: 'item1', qty: 4, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     const lineId = sale.items[0].lineId;
     await refundSaleItems(ownerDb, sale, [{ lineId, qty: 1 }], { refundedBy: 'owner1' });
@@ -178,8 +179,8 @@ describe('refundSaleItems', () => {
 
   it('refuses to refund more than what remains unrefunded on a line', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      mgrDb, [{ itemId: 'item1', qty: 2, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     const lineId = sale.items[0].lineId;
     await refundSaleItems(ownerDb, sale, [{ lineId, qty: 2 }], { refundedBy: 'owner1' });
@@ -189,8 +190,8 @@ describe('refundSaleItems', () => {
 
   it('refuses to refund a cancelled sale', async () => {
     const sale = await completeSale(
-      cashDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      mgrDb, [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000 }], null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     );
     await cancelSale(ownerDb, sale);
     await expect(refundSaleItems(ownerDb, sale, [{ lineId: sale.items[0].lineId, qty: 1 }], { refundedBy: 'owner1' }))
@@ -201,12 +202,12 @@ describe('refundSaleItems', () => {
 describe('completeSale validation', () => {
   it('rejects a cart line with qty <= 0 instead of silently inflating stock', async () => {
     await expect(completeSale(
-      cashDb,
+      mgrDb,
       [{ itemId: 'item1', qty: -2, unitName: 'Piece', unitPrice: 1000 }],
       null,
-      { shopId: 'shopA', cashierId: 'cashA', cashierEmail: 'cash@test.com' }
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
     )).rejects.toThrow(/invalid quantity/i);
-    const item = (await getDoc(doc(cashDb, 'items', 'item1'))).data();
+    const item = (await getDoc(doc(mgrDb, 'items', 'item1'))).data();
     expect(item.quantity).toBe(10);
   });
 });

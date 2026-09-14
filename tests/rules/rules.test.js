@@ -59,23 +59,28 @@ describe('items collection shop scoping', () => {
     await assertFails(getDoc(doc(mgrCtx.firestore(), 'items', 'item1')));
   });
 
-  it('blocks a cashier from editing price/name fields, even on their own shop\'s item', async () => {
-    await seedUser('cashA', { role: 'cashier', shopId: 'shopA' });
+  // Cashier is removed per the "Manager Portal & Account Structure" spec —
+  // Manager is now the role that operates day-to-day at a single shop
+  // (isLocationStaff() in firestore.rules), so these two behaviors (still
+  // genuinely true today) are exercised against a Manager account instead
+  // of the removed Cashier role.
+  it('blocks a manager from editing price/name fields, even on their own shop\'s item', async () => {
+    await seedUser('mgrA', { role: 'manager', shopId: 'shopA' });
     await seedItem('item1', { sku: 'BAT-1', shopId: 'shopA', quantity: 5, sellingPrice: 100 });
-    const cashCtx = testEnv.authenticatedContext('cashA');
+    const mgrCtx = testEnv.authenticatedContext('mgrA');
     await assertFails(
-      updateDoc(doc(cashCtx.firestore(), 'items', 'item1'), { sellingPrice: 999 })
+      updateDoc(doc(mgrCtx.firestore(), 'items', 'item1'), { sellingPrice: 999 })
     );
   });
 
-  it('lets a cashier update only quantity/unitStock on their own shop\'s item', async () => {
-    await seedUser('cashA', { role: 'cashier', shopId: 'shopA' });
+  it('lets a manager update only quantity/unitStock on their own shop\'s item', async () => {
+    await seedUser('mgrA', { role: 'manager', shopId: 'shopA' });
     await seedItem('item1', {
       sku: 'BAT-1', shopId: 'shopA', quantity: 5, unitStock: { Piece: 5 }, sellingPrice: 100,
     });
-    const cashCtx = testEnv.authenticatedContext('cashA');
+    const mgrCtx = testEnv.authenticatedContext('mgrA');
     await assertSucceeds(
-      updateDoc(doc(cashCtx.firestore(), 'items', 'item1'), {
+      updateDoc(doc(mgrCtx.firestore(), 'items', 'item1'), {
         quantity: 4, unitStock: { Piece: 4 },
       })
     );
@@ -90,12 +95,12 @@ describe('items collection shop scoping', () => {
 
 describe('shops collection', () => {
   it('lets any signed-in user read shops', async () => {
-    await seedUser('cashA', { role: 'cashier', shopId: 'shopA' });
+    await seedUser('mgrA', { role: 'manager', shopId: 'shopA' });
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'shops', 'shopA'), { id: 'shopA', name: 'Branch A' });
     });
-    const cashCtx = testEnv.authenticatedContext('cashA');
-    await assertSucceeds(getDoc(doc(cashCtx.firestore(), 'shops', 'shopA')));
+    const mgrCtx = testEnv.authenticatedContext('mgrA');
+    await assertSucceeds(getDoc(doc(mgrCtx.firestore(), 'shops', 'shopA')));
   });
 
   it('blocks a manager from creating a shop', async () => {
@@ -116,20 +121,23 @@ describe('shops collection', () => {
 });
 
 describe('users collection', () => {
-  it('blocks a cashier from changing their own role', async () => {
-    await seedUser('cashA', { role: 'cashier', shopId: 'shopA' });
-    const cashCtx = testEnv.authenticatedContext('cashA');
+  it('blocks a manager from changing their own role', async () => {
+    await seedUser('mgrA', { role: 'manager', shopId: 'shopA' });
+    const mgrCtx = testEnv.authenticatedContext('mgrA');
     await assertFails(
-      updateDoc(doc(cashCtx.firestore(), 'users', 'cashA'), { role: 'owner' })
+      updateDoc(doc(mgrCtx.firestore(), 'users', 'mgrA'), { role: 'owner' })
     );
   });
 
   it('lets an owner change another user\'s role', async () => {
     await seedUser('owner1', { role: 'owner', shopId: null });
-    await seedUser('cashA', { role: 'cashier', shopId: 'shopA' });
+    await seedUser('mgrA', { role: 'manager', shopId: 'shopA' });
     const ownerCtx = testEnv.authenticatedContext('owner1');
+    // roleWriteOk() deliberately blocks EVERY write that sets role to
+    // 'admin'/'owner' (there is exactly one Admin account, created only by
+    // scripts/create-owner.js) — so this exercises a non-Admin target role.
     await assertSucceeds(
-      updateDoc(doc(ownerCtx.firestore(), 'users', 'cashA'), { role: 'manager' })
+      updateDoc(doc(ownerCtx.firestore(), 'users', 'mgrA'), { role: 'warehouse' })
     );
   });
 });

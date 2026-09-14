@@ -185,6 +185,7 @@ th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
 
 .section-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .section-header-row h2, .section-header-row h3 { margin: 0; }
+.restock-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .pos-view { display: flex; gap: 20px; align-items: flex-start; }
 .pos-main { flex: 1; min-width: 0; }

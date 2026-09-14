@@ -17,7 +17,7 @@ export const PERMISSIONS = {
   admin: {
     viewInventory: true, editInventory: true, deleteInventory: true,
     manageCategories: true, manageSuppliers: true, manageLocations: true,
-    stockReceive: true, stockIssue: true, editMarkup: true,
+    stockReceive: true, stockIssue: true,
     // Admin is the central administrator/monitoring account for the whole
     // system — never a POS user. This is intentionally `false` (not a
     // config toggle): App.jsx's `case 'pos':` guard and Topbar's nav-item
@@ -46,7 +46,7 @@ export const PERMISSIONS = {
   manager: {
     viewInventory: true, editInventory: false, deleteInventory: false,
     manageCategories: false, manageSuppliers: false, manageLocations: false,
-    stockReceive: false, stockIssue: false, editMarkup: true,
+    stockReceive: false, stockIssue: false,
     pos: true, viewReports: true, viewSalesReports: true, print: true, cancelSales: false,
     initiateTransfer: true, confirmTransfer: true,
     reportDamage: true, approveDamage: true,
@@ -70,7 +70,7 @@ export const PERMISSIONS = {
   warehouse: {
     viewInventory: true, editInventory: false, deleteInventory: false,
     manageCategories: false, manageSuppliers: false, manageLocations: false,
-    stockReceive: false, stockIssue: false, editMarkup: false,
+    stockReceive: false, stockIssue: false,
     pos: false, viewReports: true, viewSalesReports: false, print: true, cancelSales: false,
     initiateTransfer: true, confirmTransfer: true,
     reportDamage: true, approveDamage: true,

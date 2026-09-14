@@ -28,6 +28,26 @@ import QRCodeImage from '../barcode/QRCodeImage';
 const CREATABLE_ROLES = ['manager', 'warehouse'];
 const BLANK_FORM = { username: '', fullName: '', role: 'manager', shopId: '' };
 
+// Firebase Auth's client SDK never lets a signed-in user change someone
+// ELSE's password — only their own. So there is no in-app button here
+// that can actually reset a Manager/Warehouse user's password; the only
+// real way is scripts/reset-user-password.js, which uses the Admin SDK
+// (a service account) the browser never has access to. Rather than fake a
+// button that would just fail, or silently omit any path at all (the gap
+// this replaces), this shows the exact command to run instead.
+function ResetPasswordHint({ username }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return <button type="button" className="btn-link" onClick={() => setOpen(true)}>Reset password…</button>;
+  }
+  return (
+    <span className="users-inline-username">
+      <code>node scripts/reset-user-password.js {username}</code>
+      <button type="button" className="btn-secondary" onClick={() => setOpen(false)}>Close</button>
+    </span>
+  );
+}
+
 function OwnUsernameField({ uid, current }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
@@ -164,7 +184,7 @@ export default function UsersView({ currentUid }) {
 
       <table className="users-table">
         <thead>
-          <tr><th>Name</th><th>Username</th><th>Role</th><th>Shop</th><th>Status</th></tr>
+          <tr><th>Name</th><th>Username</th><th>Role</th><th>Shop</th><th>Status</th><th>Password</th></tr>
         </thead>
         <tbody>
           {users.map((u) => (
@@ -198,6 +218,9 @@ export default function UsersView({ currentUid }) {
                     {u.active ? 'Deactivate' : 'Reactivate'}
                   </button>
                 )}
+              </td>
+              <td>
+                {(u.role === 'owner' || u.role === 'admin' || !u.username) ? '—' : <ResetPasswordHint username={u.username} />}
               </td>
             </tr>
           ))}

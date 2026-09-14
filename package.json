@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:emulator": "firebase emulators:exec --only firestore,auth \"vitest run\""
   },
   "dependencies": {
     "firebase": "^12.15.0",
