@@ -29,7 +29,7 @@ function computeDiscount(subtotal, discount) {
   return { type, value: fixed, amount: round2(fixed) };
 }
 
-export async function completeSale(db, cartLines, amountReceived, { shopId, cashierId, cashierEmail, shopName, paymentMethod, discount }) {
+export async function completeSale(db, cartLines, amountReceived, { shopId, cashierId, cashierEmail, shopName, paymentMethod, discount, customer }) {
   if (!cartLines || cartLines.length === 0) throw new Error('Cart is empty');
 
   const receiptNo = 'R' + Date.now().toString(36).toUpperCase();
@@ -74,8 +74,29 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
 
     const saleLines = cartLines.map((line) => {
       const item = freshItems[line.itemId];
+      // Serialized items (battery lines with item.trackSerial — see
+      // ItemForm's "Track serial numbers" toggle) must have exactly one
+      // serial entered per unit sold, so warrantyLookup below always has a
+      // 1:1 serial-to-sold-unit mapping. Checked here (inside the
+      // transaction, against the fresh item) rather than only in the POS
+      // UI, so this can't be bypassed by a stale cart.
+      if (item.trackSerial) {
+        const serials = (line.serials || []).map((s) => s.trim()).filter(Boolean);
+        if (serials.length !== line.qty) {
+          throw new Error(`Enter ${line.qty} serial number${line.qty === 1 ? '' : 's'} for ${item.sku || item.name}`);
+        }
+      }
       const price = line.unitPrice ?? item.sellingPrice ?? item.unitCost;
       const lineCost = item.unitCost ?? 0;
+      // A battery trade-in: the old unit's brand/serial is kept for
+      // reference (e.g. returning cores to a supplier for credit), and
+      // `creditAmount` comes straight off this line's total — cost is
+      // unaffected, so profit absorbs the credit exactly like a discount
+      // does in computeDiscount() above.
+      const coreCredit = line.coreExchange?.creditAmount > 0
+        ? Math.min(price * line.qty, Number(line.coreExchange.creditAmount) || 0)
+        : 0;
+      const lineTotal = price * line.qty - coreCredit;
       return {
         // Firestore rejects `undefined` field values outright (the whole
         // transaction.set() fails), so sku/name are defaulted rather than
@@ -88,7 +109,12 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
         itemId: item.id, sku: item.sku || '', name: item.name || '',
         qty: line.qty, unitName: line.unitName || item.baseUnitName || 'Piece', factor: line.factor ?? 1,
         unitPrice: price, unitCost: lineCost,
-        lineTotal: price * line.qty, lineProfit: (price - lineCost) * line.qty,
+        lineTotal, lineProfit: lineTotal - lineCost * line.qty,
+        serials: item.trackSerial ? (line.serials || []).map((s) => s.trim()).filter(Boolean) : [],
+        warrantyMonths: item.trackSerial ? (Number(item.warrantyMonths) || 0) : 0,
+        coreExchange: coreCredit > 0
+          ? { oldSerial: line.coreExchange.oldSerial || '', oldBrand: line.coreExchange.oldBrand || '', creditAmount: coreCredit }
+          : null,
       };
     });
     const subtotal = saleLines.reduce((s, l) => s + l.lineTotal, 0);
@@ -112,6 +138,11 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
       // here at creation so every sale doc has the same shape from day one.
       refunds: [], refundedAmount: 0, refundedProfit: 0,
       paymentMethod: paymentMethod || 'Cash', receiptToken,
+      // Optional — entirely off by default, same as discount. Mainly
+      // useful alongside serial-tracked items: a warranty lookup by serial
+      // already finds the sale, but a shop also wants to find "which
+      // serials did this customer buy" the other direction.
+      customerName: customer?.name || '', customerPhone: customer?.phone || '',
     };
 
     // Public, customer-safe mirror the QR code on the receipt points to —
@@ -138,6 +169,26 @@ export async function completeSale(db, cartLines, amountReceived, { shopId, cash
       });
     });
     transaction.set(doc(db, 'sales', sale.id), sale);
+
+    // One warrantyLookup doc per serial sold — keyed by the serial itself
+    // (not the sale/item id) so the Warranty Lookup screen is a direct
+    // getDoc, not a query, for the single most common thing it needs to
+    // answer: "is THIS serial still under warranty". A duplicate serial
+    // (re-selling the same number by mistake) simply overwrites the prior
+    // entry — this app has no independent way to verify serial uniqueness
+    // against the physical stock, so it trusts what's typed in.
+    saleLines.forEach((line) => {
+      (line.serials || []).forEach((serial) => {
+        transaction.set(doc(db, 'warrantyLookup', serial), {
+          serial, itemId: line.itemId, sku: line.sku, name: line.name,
+          saleId: sale.id, receiptNo, shopId, shopName: shopName || '',
+          soldAt: now, warrantyMonths: line.warrantyMonths || 0,
+          warrantyExpiresAt: line.warrantyMonths ? now + line.warrantyMonths * 30 * 86400000 : null,
+          customerName: sale.customerName, customerPhone: sale.customerPhone,
+          cashierId: cashierId || null,
+        });
+      });
+    });
 
     return sale;
   });

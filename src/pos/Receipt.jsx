@@ -76,12 +76,20 @@ export default function Receipt({ sale, shopName, copyLabel = 'Customer Copy', o
           <tbody>
             {sale.items.map((line, i) => (
               <tr key={i}>
-                <td>{line.sku} × {line.qty} {line.unitName}<br /><span className="receipt-unit-price">{currency(line.unitPrice)} each</span></td>
+                <td>
+                  {line.sku} × {line.qty} {line.unitName}<br /><span className="receipt-unit-price">{currency(line.unitPrice)} each</span>
+                  {line.serials?.length > 0 && <><br /><span className="receipt-unit-price">Serial: {line.serials.join(', ')}</span></>}
+                  {line.warrantyMonths > 0 && <><br /><span className="receipt-unit-price">Warranty: {line.warrantyMonths} months</span></>}
+                  {line.coreExchange && <><br /><span className="receipt-unit-price">Trade-in credit ({line.coreExchange.oldBrand || 'old unit'}): -{currency(line.coreExchange.creditAmount)}</span></>}
+                </td>
                 <td>{currency(line.lineTotal)}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        {(sale.customerName || sale.customerPhone) && (
+          <p className="receipt-meta">Customer: {sale.customerName}{sale.customerName && sale.customerPhone ? ' — ' : ''}{sale.customerPhone}</p>
+        )}
         {sale.discountAmount > 0 && (
           <>
             <p className="receipt-meta">Subtotal: {currency(sale.subtotal)}</p>

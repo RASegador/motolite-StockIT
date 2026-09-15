@@ -16,6 +16,10 @@ import OwnerActivityLog from './reports/OwnerActivityLog';
 import RestockView from './restock/RestockView';
 import ShopReports from './reports/ShopReports';
 import SalesHistory from './reports/SalesHistory';
+import CashReconciliationView from './reports/CashReconciliationView';
+import CycleCountView from './cyclecount/CycleCountView';
+import PurchaseOrdersView from './purchasing/PurchaseOrdersView';
+import WarrantyLookupView from './warranty/WarrantyLookupView';
 import { useShops } from './shops/useShops';
 import { can } from './lib/permissions';
 
@@ -183,6 +187,20 @@ export default function App() {
         return (can(role, 'createRestockRequest') || can(role, 'reviewRestockRequest'))
           ? requireOwnerShop(<RestockView role={role} shopId={writeShopId} userId={user.uid} />)
           : defaultView();
+      case 'cashClose':
+        return can(role, 'manageCashReconciliation')
+          ? requireOwnerShop(<CashReconciliationView shopId={writeShopId} shopName={shopName} userId={user.uid} userName={profile.fullName} />)
+          : defaultView();
+      case 'cycleCount':
+        return can(role, 'manageCycleCounts')
+          ? requireOwnerShop(<CycleCountView role={role} shopId={writeShopId} userId={user.uid} />)
+          : defaultView();
+      case 'purchaseOrders':
+        return can(role, 'viewPurchaseOrders')
+          ? requireOwnerShop(<PurchaseOrdersView role={role} shopId={writeShopId} userId={user.uid} />)
+          : defaultView();
+      case 'warranty':
+        return can(role, 'viewWarrantyLookup') ? <WarrantyLookupView /> : defaultView();
       case 'overview':
       default:
         return defaultView();

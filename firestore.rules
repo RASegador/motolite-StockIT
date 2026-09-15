@@ -290,6 +290,56 @@ service cloud.firestore {
     // "Manager Portal & Account Structure" spec: Categories/Suppliers/
     // Locations are now Admin-only — a Manager can view them (needed for
     // e.g. the Category filter on Inventory) but never create or edit one.
+    // Physical stock count sessions. Starting one and entering counted
+    // quantities is allowed for the shop's own location staff (or Admin);
+    // applying the count only ever ends up changing an item's
+    // quantity/unitStock (enforced by the `items` update rule itself, not
+    // here), so it's opened to the same location staff rather than made
+    // Admin-only — consistent with how a sale/transfer/refund already lets
+    // a Manager touch those two fields at their own shop.
+    match /cycleCounts/{countId} {
+      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId'));
+      allow create: if isAdmin() || (isLocationStaff() && sameShop(request.resource.data.shopId));
+      allow update: if isAdmin() ||
+        (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
+          onlyChanged(['items', 'status', 'appliedBy', 'appliedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // Supplier purchase orders. Creating/editing the order itself (choosing
+    // a supplier, line items, cost) is Admin-only — suppliers are
+    // Admin-managed, same as Categories/Locations/Suppliers above. Booking
+    // a receipt against an existing PO is opened to the destination shop's
+    // own location staff, mirroring how confirming a Transfer works.
+    match /purchaseOrders/{poId} {
+      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId'));
+      allow create: if isAdmin();
+      allow update: if isAdmin() ||
+        (isLocationStaff() && sameShopAsDoc(resource, 'shopId') &&
+          onlyChanged(['lines', 'status', 'receivedBy', 'receivedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // Day-end cash counts — a record-keeping doc that never touches
+    // inventory or sales data itself, so any signed-in staff at that shop
+    // (or Admin) may read/write it.
+    match /cashReconciliations/{reconciliationId} {
+      allow read: if isSignedIn() && (isAdmin() || sameShopAsDoc(resource, 'shopId'));
+      allow write: if isAdmin() || (isLocationStaff() && sameShop(request.resource.data.shopId));
+    }
+
+    // Serial-number -> warranty-status lookup, written alongside the sale
+    // that sold that serial (see completeSale in salesActions.js). Same
+    // create-roles as `sales`/`receiptsPublic` above. Readable by any
+    // signed-in staff — a warranty lookup is meant to be usable by whoever
+    // is at the counter, not just the shop that made the original sale.
+    match /warrantyLookup/{serial} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || isManager();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /categories/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
@@ -301,6 +351,14 @@ service cloud.firestore {
     match /suppliers/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // Recipient list for the optional low-stock email Cloud Function (see
+    // functions/index.js) — the function itself uses the Admin SDK and
+    // bypasses these rules entirely, so this only matters if an Admin UI
+    // ever reads/edits the recipient list directly from Firestore.
+    match /settings/{id} {
+      allow read, write: if isAdmin();
     }
   }
 }

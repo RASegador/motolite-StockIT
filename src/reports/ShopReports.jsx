@@ -7,6 +7,7 @@ import { itemInventoryValue } from '../lib/units';
 import { netRevenue, netProfit } from '../lib/salesMath';
 import { computeRestockAlerts } from '../restock/restockAlerts';
 import LowStockDigest from './LowStockDigest';
+import ProfitSlowMoverReport from './ProfitSlowMoverReport';
 
 export default function ShopReports({ shopId, shopName }) {
   const items = useItems({ role: 'manager', shopId });
@@ -40,6 +41,9 @@ export default function ShopReports({ shopId, shopName }) {
         <button onClick={() => exportSalesReportPdf(sales, { title: `${shopName} — Sales Report` })}>Export sales PDF</button>
         <button onClick={() => exportInventoryReportPdf(items, { title: `${shopName} — Inventory Report` })}>Export inventory PDF</button>
       </div>
+
+      <h3>Profit &amp; slow movers</h3>
+      <ProfitSlowMoverReport items={items} sales={sales} />
     </div>
   );
 }

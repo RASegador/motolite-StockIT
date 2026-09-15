@@ -548,3 +548,43 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .damage-history-list li strong { margin-right: 4px; }
 .damage-history-action { border-top: 1px solid #eee; padding-top: 12px; margin-top: 12px; }
 .public-page-loading, .public-page-error { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #666; text-align: center; padding: 24px; }
+
+/* src/inventory/ItemForm.jsx — Track serial numbers */
+.item-form-checkbox-field { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: normal; }
+
+/* src/pos/POSView.jsx — serials, core exchange, offline queue, customer */
+.pos-offline-banner { display: flex; align-items: center; gap: 8px; background: #fff3cd; color: #93720b; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
+.pos-offline-banner-saved { background: #e3f2e5; color: #1e6b2e; }
+.pos-cart-line { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+.pos-cart-line-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pos-cart-line-serials { display: flex; flex-wrap: wrap; gap: 6px; }
+.pos-cart-line-serials input { flex: 1; min-width: 90px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; }
+.pos-cart-line-core { font-size: 12px; color: #555; }
+.pos-cart-line-core summary { cursor: pointer; }
+.pos-cart-line-core-fields { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pos-cart-line-core-fields input { flex: 1; min-width: 90px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; }
+.pos-customer { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+
+/* src/reports/CashReconciliationView.jsx and other variance tables */
+.cash-reconciliation-short { color: #c1272d; font-weight: 600; }
+.cash-reconciliation-over { color: #1e6b2e; font-weight: 600; }
+.cash-reconciliation-date { display: block; margin-bottom: 10px; font-size: 13px; }
+.cash-reconciliation-existing { font-size: 12px; color: #93720b; background: #fff3cd; padding: 6px 10px; border-radius: 6px; margin-bottom: 10px; }
+.cash-reconciliation-total { margin: 10px 0; font-size: 14px; }
+.cash-reconciliation-notes { display: flex; flex-direction: column; gap: 4px; font-size: 13px; margin-bottom: 10px; }
+.cash-reconciliation-notes textarea { padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; }
+
+/* src/cyclecount/CycleCountView.jsx */
+.cycle-count-start { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; max-width: 420px; }
+.cycle-count-hint { font-size: 13px; color: #666; margin-bottom: 10px; }
+.cycle-count-view h3 { margin-top: 24px; }
+
+/* src/reports/ProfitSlowMoverReport.jsx */
+.profit-report-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.profit-report-tab { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 13px; cursor: pointer; }
+.profit-report-tab.active { background: var(--motolite-red); color: #fff; border-color: var(--motolite-red); }
+
+/* src/warranty/WarrantyLookupView.jsx */
+.warranty-lookup-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.warranty-lookup-form select, .warranty-lookup-form input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+.warranty-lookup-form input { flex: 1; min-width: 180px; }

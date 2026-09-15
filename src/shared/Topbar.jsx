@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   LayoutGrid, Boxes, ShoppingCart, AlertTriangle, Truck, Store, ShieldCheck, Tag, Receipt, LogOut,
-  ChevronDown, Menu, X, ClipboardList, PackageSearch,
+  ChevronDown, Menu, X, ClipboardList, PackageSearch, Wallet, ClipboardCheck, PackagePlus, BadgeCheck,
 } from 'lucide-react';
 import { can } from '../lib/permissions';
 import Tooltip from './Tooltip';
@@ -14,6 +14,10 @@ const NAV_ITEMS = [
   { key: 'damage', label: 'Damaged/Returned', icon: AlertTriangle, permission: 'reportDamage' },
   { key: 'transfers', label: 'Branch Transfers', icon: Truck, anyPermission: ['initiateTransfer', 'confirmTransfer'] },
   { key: 'restock', label: 'Restock', icon: PackageSearch, anyPermission: ['createRestockRequest', 'reviewRestockRequest'] },
+  { key: 'purchaseOrders', label: 'Purchase Orders', icon: PackagePlus, permission: 'viewPurchaseOrders' },
+  { key: 'cycleCount', label: 'Stock Count', icon: ClipboardCheck, permission: 'manageCycleCounts' },
+  { key: 'cashClose', label: 'Day-End Cash', icon: Wallet, permission: 'manageCashReconciliation' },
+  { key: 'warranty', label: 'Warranty Lookup', icon: BadgeCheck, permission: 'viewWarrantyLookup' },
   // Gated on 'viewOwnSales' OR 'viewSalesReports': 'viewOwnSales' is true
   // for Admin only (sees every sale across every shop), and
   // 'viewSalesReports' is true for Admin and Manager (Manager sees their

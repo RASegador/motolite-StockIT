@@ -15,6 +15,7 @@ import { buildActivityFeed, activityLabel } from './activityFeed';
 import { exportSalesReportPdf, exportInventoryReportPdf } from './pdfExport';
 import { currency } from '../lib/format';
 import LowStockDigest from './LowStockDigest';
+import ProfitSlowMoverReport from './ProfitSlowMoverReport';
 
 export default function OwnerDashboard({ userId }) {
   const items = useItems({ role: 'admin' });
@@ -159,6 +160,12 @@ export default function OwnerDashboard({ userId }) {
           )}
         </tbody>
       </table>
+
+      <h3>Profit &amp; slow movers</h3>
+      <p className="dashboard-activity-hint">
+        Which items are actually making money, and which are sitting on shelves without selling.
+      </p>
+      <ProfitSlowMoverReport items={items} sales={sales} />
 
       <h3>Users</h3>
       <table>

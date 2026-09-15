@@ -28,7 +28,7 @@ function draftFromItem(item) {
     ...u,
     stock: item.unitStock?.[u.name] ?? 0,
   }));
-  return { ...item, baseUnitName, baseUnitStock, units };
+  return { ...item, baseUnitName, baseUnitStock, units, trackSerial: item.trackSerial ?? false };
 }
 
 function blankDraft() {
@@ -47,7 +47,7 @@ function blankDraft() {
     baseUnitName: 'Piece', baseUnitStock: 0, units: [],
     unitCost: 0, markupType: 'percent', markupValue: 0,
     batteryModel: '', voltage: 12, capacity: '', warrantyMonths: 12, vehicleType: '',
-    reorderPoint: 0, reorderUnit: 'Piece',
+    reorderPoint: 0, reorderUnit: 'Piece', trackSerial: false,
   };
 }
 
@@ -242,6 +242,13 @@ export default function ItemForm({ item, shopId, role, userId, onDone }) {
           <datalist id="vehicle-type-suggestions">
             {VEHICLE_TYPE_SUGGESTIONS.map((v) => <option key={v} value={v} />)}
           </datalist>
+        </Field>
+        <Field label="Track serial numbers">
+          <label className="item-form-checkbox-field">
+            <input type="checkbox" checked={!!draft.trackSerial}
+              onChange={(e) => setDraft({ ...draft, trackSerial: e.target.checked })} />
+            Require a serial number at checkout (for warranty lookup)
+          </label>
         </Field>
       </Section>
 

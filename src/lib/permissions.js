@@ -31,6 +31,8 @@ export const PERMISSIONS = {
     manageUsers: true, manageShops: true, viewOwnSales: true,
     viewConsolidatedReports: true, viewActivityLog: true,
     createRestockRequest: true, reviewRestockRequest: true,
+    manageCashReconciliation: true, manageCycleCounts: true, managePurchaseOrders: true,
+    viewPurchaseOrders: true, viewWarrantyLookup: true,
   },
   // Manager: no Categories, no Suppliers, no direct inventory edit — those
   // are Admin-only now (manageCategories/manageSuppliers/manageLocations
@@ -55,6 +57,18 @@ export const PERMISSIONS = {
     // A store Manager can submit a Restock Request to the warehouse, but
     // reviewing/approving one is a Warehouse/Admin-only action per spec.
     createRestockRequest: true, reviewRestockRequest: false,
+    // A Manager runs their own shop's day-end cash count, and can run a
+    // physical stock count end-to-end (start, enter counts, apply the
+    // variance) at their own shop — applying only ever changes
+    // quantity/unitStock, the same fields a sale/transfer/refund already
+    // lets a Manager touch at their own shop (see firestore.rules' `items`
+    // update rule), so this isn't a new kind of access, just a new way to
+    // reach it. Managing Purchase Orders (creating one, choosing a
+    // supplier) stays Admin-only — suppliers themselves are Admin-managed —
+    // but a Manager can book an already-created PO's incoming stock at
+    // their own shop.
+    manageCashReconciliation: true, manageCycleCounts: true, managePurchaseOrders: false,
+    viewPurchaseOrders: true, viewWarrantyLookup: true,
   },
   // Warehouse staff: their own login, scoped to one assigned warehouse
   // (a `shops` doc with `type: 'warehouse'` — see src/shops/shopActions.js).
@@ -77,6 +91,8 @@ export const PERMISSIONS = {
     manageUsers: false, manageShops: false, viewOwnSales: false,
     viewConsolidatedReports: false, viewActivityLog: false,
     createRestockRequest: true, reviewRestockRequest: true,
+    manageCashReconciliation: false, manageCycleCounts: true, managePurchaseOrders: false,
+    viewPurchaseOrders: true, viewWarrantyLookup: false,
   },
 };
 

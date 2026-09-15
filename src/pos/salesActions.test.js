@@ -23,6 +23,11 @@ beforeEach(async () => {
       quantity: 10, unitStock: { Piece: 10 }, units: [],
       unitCost: 800, sellingPrice: 1000,
     });
+    await setDoc(doc(ctx.firestore(), 'items', 'item2'), {
+      id: 'item2', sku: 'N70', name: 'Motolite N70', shopId: 'shopA', baseUnitName: 'Piece',
+      quantity: 10, unitStock: { Piece: 10 }, units: [],
+      unitCost: 1500, sellingPrice: 2000, trackSerial: true, warrantyMonths: 12,
+    });
   });
   mgrDb = testEnv.authenticatedContext('mgrA').firestore();
   // Cancelling a sale is Admin-only per the spec's permission table (a
@@ -255,5 +260,59 @@ describe('completeSale validation', () => {
     )).rejects.toThrow(/invalid quantity/i);
     const item = (await getDoc(doc(mgrDb, 'items', 'item1'))).data();
     expect(item.quantity).toBe(10);
+  });
+});
+
+describe('completeSale — serial-tracked items', () => {
+  it('requires exactly one serial per unit sold and writes a warrantyLookup doc for each', async () => {
+    const sale = await completeSale(
+      mgrDb,
+      [{ itemId: 'item2', qty: 2, unitName: 'Piece', unitPrice: 2000, serials: ['SN-001', 'SN-002'] }],
+      null,
+      { shopId: 'shopA', shopName: 'Branch A', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
+    );
+    expect(sale.items[0].serials).toEqual(['SN-001', 'SN-002']);
+
+    const record = (await getDoc(doc(mgrDb, 'warrantyLookup', 'SN-001'))).data();
+    expect(record).toMatchObject({ itemId: 'item2', sku: 'N70', shopId: 'shopA', warrantyMonths: 12 });
+    expect(record.warrantyExpiresAt).toBeGreaterThan(Date.now());
+  });
+
+  it('rejects the sale when the serial count does not match the quantity sold', async () => {
+    await expect(completeSale(
+      mgrDb,
+      [{ itemId: 'item2', qty: 2, unitName: 'Piece', unitPrice: 2000, serials: ['SN-001'] }],
+      null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
+    )).rejects.toThrow(/enter 2 serial/i);
+    const item = (await getDoc(doc(mgrDb, 'items', 'item2'))).data();
+    expect(item.quantity).toBe(10); // untouched — the whole transaction rolled back
+  });
+});
+
+describe('completeSale — core/trade-in exchange', () => {
+  it('deducts the credit from the line total and profit, and records the old unit', async () => {
+    const sale = await completeSale(
+      mgrDb,
+      [{
+        itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000,
+        coreExchange: { oldBrand: 'Generic', oldSerial: 'OLD-1', creditAmount: 150 },
+      }],
+      null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
+    );
+    expect(sale.items[0].lineTotal).toBe(850);
+    expect(sale.items[0].coreExchange).toMatchObject({ oldBrand: 'Generic', oldSerial: 'OLD-1', creditAmount: 150 });
+    expect(sale.total).toBe(850);
+  });
+
+  it('clamps an oversized credit to the line total rather than going negative', async () => {
+    const sale = await completeSale(
+      mgrDb,
+      [{ itemId: 'item1', qty: 1, unitName: 'Piece', unitPrice: 1000, coreExchange: { creditAmount: 5000 } }],
+      null,
+      { shopId: 'shopA', cashierId: 'mgrA', cashierEmail: 'cash@test.com' }
+    );
+    expect(sale.items[0].lineTotal).toBe(0);
   });
 });
